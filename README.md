@@ -1,6 +1,6 @@
 # TransferX - Multi-Rail Funds Transfer Platform
 
-A polyglot microservices demo platform showcasing Nix's ability to build reproducible, compliant systems across 6 different programming languages (Go, .NET, Python, Java, COBOL, Rust) plus a Next.js frontend.
+A polyglot microservices demo platform showcasing Nix's ability to build reproducible, compliant systems across 9 different programming languages (Go, .NET, Python, Java, Perl, COBOL, Rust, Node.js/TypeScript, Ruby).
 
 ## The Story
 
@@ -10,7 +10,7 @@ TransferX is a fictional fintech that handles both traditional bank transfers (v
 
 ## Architecture
 
-The platform consists of 7 services:
+The platform consists of 9 services:
 
 | Service | Language | Purpose | Port |
 |---------|----------|---------|------|
@@ -20,8 +20,9 @@ The platform consists of 7 services:
 | **fee-service** | Python/FastAPI | Transfer fee calculation | 8082 |
 | **sanctions-service** | Java/Spring Boot | OFAC/PEP sanctions screening | 8083 |
 | **audit-service** | Perl | Transaction logging and audit trail | 8084 |
-| **swift-gateway** | COBOL (GnuCOBOL) | SWIFT MT103 message generation | - |
+| **swift-gateway** | COBOL (GnuCOBOL) | SWIFT MT103 message generation | 8086 |
 | **crypto-transfer** | Rust/Axum | Cryptocurrency transfer processing | 8085 |
+| **smoke-tests** | Ruby/Cucumber | Integration testing and health checks | 8090 |
 
 ## Transfer Flow
 
@@ -156,7 +157,8 @@ transferx/
 │   ├── sanctions-service/   # Java service
 │   ├── audit-service/       # Perl service
 │   ├── swift-gateway/       # COBOL service
-│   └── crypto-transfer/     # Rust service
+│   ├── crypto-transfer/     # Rust service
+│   └── smoke-tests/         # Ruby/Cucumber testing service
 ├── release/                 # Per-service release definitions
 ├── compliance/              # Generated SBOMs and vulnerability reports
 ├── .devcontainer/           # VSCode devcontainer config
@@ -317,7 +319,7 @@ This demo showcases:
 - **Vulnerability Scanning**: Grype + Trivy integration for all images
 - **Build Provenance**: Nix derivation hashes + GitHub attestations
 - **Dependency Submission**: Automatic upload to GitHub Security
-- **Polyglot Support**: Unified build system across 7 languages (Go, .NET, Python, Java, Perl, COBOL, Rust)
+- **Polyglot Support**: Unified build system across 9 languages (Go, .NET, Python, Java, Perl, COBOL, Rust, Node.js/TypeScript, Ruby)
 
 Perfect for demonstrating compliance with:
 - **DORA** (Digital Operational Resilience Act) - ICT risk management
