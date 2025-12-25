@@ -9,9 +9,24 @@ services:
       - SANCTIONS_SERVICE_URL=http://sanctions-service:8083
       - CRYPTO_SERVICE_URL=http://crypto-transfer:8085
       - AUDIT_SERVICE_URL=http://audit-service:8084
+      - SMOKE_TESTS_URL=http://smoke-tests:8090
     volumes:
       - ./compliance:/data/compliance
     depends_on:
+      - kyc-service
+      - fee-service
+      - sanctions-service
+      - crypto-transfer
+      - audit-service
+
+  smoke-tests:
+    image: transferx/smoke-tests:latest
+    ports:
+      - "8090:8090"
+    environment:
+      - API_GATEWAY_URL=http://api-gateway:8080
+    depends_on:
+      - api-gateway
       - kyc-service
       - fee-service
       - sanctions-service

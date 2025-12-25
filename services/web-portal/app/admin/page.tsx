@@ -42,7 +42,7 @@ export default function AdminPage() {
         </Link>
         <h1 className="text-4xl font-bold mb-8 text-gray-900 dark:text-white">Admin Dashboard</h1>
 
-        <div className="grid grid-cols-3 gap-4 mb-8">
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">
           <Link href="/admin" className="p-4 bg-blue-100 dark:bg-blue-900/40 rounded-lg border border-blue-200 dark:border-blue-800">
             <h2 className="font-bold text-gray-900 dark:text-white">Service Health</h2>
             <p className="text-sm text-gray-600 dark:text-gray-300">View all services</p>
@@ -54,6 +54,10 @@ export default function AdminPage() {
           <Link href="/admin/vulnerabilities" className="p-4 bg-red-100 dark:bg-red-900/40 rounded-lg border border-red-200 dark:border-red-800">
             <h2 className="font-bold text-gray-900 dark:text-white">Vulnerabilities</h2>
             <p className="text-sm text-gray-600 dark:text-gray-300">{vulnerabilities.length} found</p>
+          </Link>
+          <Link href="/admin/smoke-tests" className="p-4 bg-purple-100 dark:bg-purple-900/40 rounded-lg border border-purple-200 dark:border-purple-800">
+            <h2 className="font-bold text-gray-900 dark:text-white">Smoke Tests</h2>
+            <p className="text-sm text-gray-600 dark:text-gray-300">Run integration tests</p>
           </Link>
         </div>
 

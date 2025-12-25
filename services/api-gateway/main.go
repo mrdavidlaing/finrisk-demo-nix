@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
+	"io"
 	"log"
 	"net/http"
 	"os"
@@ -68,6 +69,7 @@ var (
 	swiftGatewayPath = getEnv("SWIFT_GATEWAY_PATH", "./swift-gateway")
 	cryptoServiceURL = getEnv("CRYPTO_SERVICE_URL", "http://localhost:8085")
 	auditServiceURL  = getEnv("AUDIT_SERVICE_URL", "http://localhost:8084")
+	smokeTestsURL    = getEnv("SMOKE_TESTS_URL", "http://localhost:8090")
 )
 
 func main() {
@@ -97,6 +99,7 @@ func main() {
 	r.Get("/api/compliance/sboms", listSBOMsHandler)
 	r.Get("/api/compliance/sboms/{service}", getSBOMHandler)
 	r.Get("/api/compliance/vulnerabilities", vulnerabilitiesHandler)
+	r.Get("/api/smoke-tests", smokeTestsProxyHandler)
 
 	port := getEnv("PORT", "8080")
 	log.Printf("API Gateway starting on port %s", port)
@@ -356,6 +359,19 @@ func logAudit(transferID string, req TransferRequest, fee float64) {
 		http.Post(fmt.Sprintf("%s/log", auditServiceURL), "application/json",
 			bytes.NewBuffer(jsonData))
 	}()
+}
+
+func smokeTestsProxyHandler(w http.ResponseWriter, r *http.Request) {
+	resp, err := http.Get(fmt.Sprintf("%s/run-tests", smokeTestsURL))
+	if err != nil {
+		http.Error(w, "Smoke tests service unavailable", http.StatusServiceUnavailable)
+		return
+	}
+	defer resp.Body.Close()
+	
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(resp.StatusCode)
+	io.Copy(w, resp.Body)
 }
 
 func getEnv(key, defaultValue string) string {

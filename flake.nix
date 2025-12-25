@@ -24,6 +24,7 @@
         crypto-transfer = pkgs.callPackage ./nix/crypto-transfer.nix { };
         audit-service = pkgs.callPackage ./nix/audit-service.nix { };
         web-portal = pkgs.callPackage ./nix/web-portal.nix { };
+        smoke-tests = pkgs.callPackage ./nix/smoke-tests.nix { };
         
         # Docker images
         api-gateway-image = pkgs.dockerTools.buildImage {
@@ -137,6 +138,20 @@
           };
         };
         
+        smoke-tests-image = pkgs.dockerTools.buildImage {
+          name = "transferx/smoke-tests";
+          tag = "latest";
+          extraCommands = ''
+            mkdir -p tmp
+            chmod 1777 tmp
+          '';
+          config = {
+            Cmd = [ "${smoke-tests}/bin/smoke-tests" ];
+            ExposedPorts = { "8090/tcp" = {}; };
+            Env = [ "HOME=/tmp" "TMPDIR=/tmp" ];
+          };
+        };
+        
         # All services package
         all-services = pkgs.symlinkJoin {
           name = "all-services";
@@ -149,6 +164,7 @@
             crypto-transfer
             audit-service
             web-portal
+            smoke-tests
           ];
         };
         
@@ -163,6 +179,7 @@
           ln -s ${crypto-transfer-image} $out/crypto-transfer.tar.gz
           ln -s ${audit-service-image} $out/audit-service.tar.gz
           ln -s ${web-portal-image} $out/web-portal.tar.gz
+          ln -s ${smoke-tests-image} $out/smoke-tests.tar.gz
         '';
         
         # SBOM generation (mock - in production use cyclonedx-cli)
@@ -180,6 +197,7 @@
           - crypto-transfer
           - audit-service
           - web-portal
+          - smoke-tests
         '';
         
         # Vulnerability scanning script
@@ -193,7 +211,7 @@
           # Load images if needed
           for img in ${api-gateway-image} ${kyc-service-image} ${fee-service-image} \
                      ${sanctions-service-image} ${swift-gateway-image} \
-                     ${crypto-transfer-image} ${audit-service-image} ${web-portal-image}; do
+                     ${crypto-transfer-image} ${audit-service-image} ${web-portal-image} ${smoke-tests-image}; do
             if [ -f "$img" ]; then
               echo "Loading image: $img"
               docker load < "$img" || true
@@ -201,7 +219,7 @@
           done
           
           # Services list
-          SERVICES="api-gateway kyc-service fee-service sanctions-service swift-gateway crypto-transfer audit-service web-portal"
+          SERVICES="api-gateway kyc-service fee-service sanctions-service swift-gateway crypto-transfer audit-service web-portal smoke-tests"
           
           for service in $SERVICES; do
              echo "Processing $service..."
@@ -241,6 +259,7 @@
           gen_nix_sbom "crypto-transfer" "${crypto-transfer}"
           gen_nix_sbom "audit-service" "${audit-service}"
           gen_nix_sbom "web-portal" "${web-portal}"
+          gen_nix_sbom "smoke-tests" "${smoke-tests}"
           
           echo "Compliance artifacts generated in compliance/"
         '';
@@ -293,6 +312,7 @@
             echo "  - audit-service (Perl)"
             echo "  - swift-gateway (COBOL)"
             echo "  - crypto-transfer (Rust)"
+            echo "  - smoke-tests (Ruby/Cucumber)"
             echo ""
             echo "Quick start: just --list"
             echo "Common commands:"
@@ -306,7 +326,7 @@
         packages = {
           # Services
           inherit api-gateway kyc-service fee-service sanctions-service 
-                  swift-gateway crypto-transfer audit-service web-portal;
+                  swift-gateway crypto-transfer audit-service web-portal smoke-tests;
           
           # Aggregated
           inherit all-services all-images all-sboms;
@@ -314,7 +334,7 @@
           # Docker images
           inherit api-gateway-image kyc-service-image fee-service-image
                   sanctions-service-image swift-gateway-image crypto-transfer-image
-                  audit-service-image web-portal-image;
+                  audit-service-image web-portal-image smoke-tests-image;
         };
         
         apps = {
@@ -332,7 +352,7 @@
               echo ""
               
               # Build and show paths with status (suppress warnings)
-              for service in api-gateway kyc-service fee-service sanctions-service swift-gateway crypto-transfer audit-service web-portal; do
+              for service in api-gateway kyc-service fee-service sanctions-service swift-gateway crypto-transfer audit-service web-portal smoke-tests; do
                 echo -n "  $service: "
                 if path=$(nix build --no-link --print-out-paths .#$service 2>/dev/null); then
                   echo "$path"

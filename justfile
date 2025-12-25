@@ -202,6 +202,14 @@ test-transfer:
             "recipient_name": "Jane Smith"
         }' | jq .
 
+# Run smoke tests against running services
+smoke-test:
+    curl -s http://localhost:8090/run-tests | jq .
+
+# Run smoke tests and show summary only
+smoke-test-summary:
+    @curl -s http://localhost:8090/run-tests | jq '.summary'
+
 # ============================================================================
 # Individual Service Builds
 # ============================================================================

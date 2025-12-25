@@ -64,4 +64,41 @@ export async function getVulnerabilities(): Promise<Vulnerability[]> {
   return response.data
 }
 
+export interface CucumberStep {
+  keyword: 'Given' | 'When' | 'Then' | 'And' | 'But'
+  text: string
+  status: 'passed' | 'failed' | 'pending' | 'skipped'
+  duration: number
+  error?: string
+}
+
+export interface CucumberScenario {
+  name: string
+  status: 'passed' | 'failed' | 'pending'
+  duration: number
+  steps: CucumberStep[]
+}
+
+export interface CucumberFeature {
+  name: string
+  description?: string
+  scenarios: CucumberScenario[]
+}
+
+export interface SmokeTestResponse {
+  status: 'passed' | 'failed'
+  summary: {
+    total: number
+    passed: number
+    failed: number
+    pending: number
+  }
+  duration: number
+  features: CucumberFeature[]
+}
+
+export async function runSmokeTests(): Promise<SmokeTestResponse> {
+  const response = await api.get<SmokeTestResponse>('/api/smoke-tests')
+  return response.data
+}
 
