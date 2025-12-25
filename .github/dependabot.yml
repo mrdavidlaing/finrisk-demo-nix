@@ -70,9 +70,3 @@ updates:
         patterns:
           - "*"
 
-  # Nix flake inputs
-  - package-ecosystem: "nix"
-    directory: "/"
-    schedule:
-      interval: "monthly"
-
