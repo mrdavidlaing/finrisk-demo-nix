@@ -21,13 +21,13 @@ jobs:
 
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
 
       - name: Install Nix
-        uses: DeterminateSystems/nix-installer-action@v14
+        uses: DeterminateSystems/nix-installer-action@v21
 
       - name: Setup Nix cache
-        uses: DeterminateSystems/magic-nix-cache-action@v8
+        uses: DeterminateSystems/magic-nix-cache-action@v13
 
       - name: Build all services
         run: nix build .#all-services --print-out-paths
@@ -36,7 +36,7 @@ jobs:
         run: nix build .#all-images --print-out-paths
 
       - name: Upload Docker images artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: docker-images
           path: result/
@@ -54,10 +54,10 @@ jobs:
 
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
 
       - name: Download Docker images
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v7
         with:
           name: docker-images
           path: images/
@@ -89,7 +89,7 @@ jobs:
           done
 
       - name: Upload SBOMs artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: sboms
           path: sboms/
@@ -110,16 +110,16 @@ jobs:
 
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
 
       - name: Download SBOMs
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v7
         with:
           name: sboms
           path: sboms/
 
       - name: Submit SBOM to GitHub Dependency Graph
-        uses: advanced-security/spdx-dependency-submission-action@v0.1.1
+        uses: advanced-security/spdx-dependency-submission-action@v0.1.2
         with:
           filePath: "sboms/${{ matrix.service }}.spdx.json"
 
@@ -137,16 +137,16 @@ jobs:
 
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
 
       - name: Download SBOMs
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v7
         with:
           name: sboms
           path: sboms/
 
       - name: Run Grype vulnerability scan
-        uses: anchore/scan-action@v5
+        uses: anchore/scan-action@v7
         id: scan
         with:
           sbom: "sboms/${{ matrix.service }}.cdx.json"
@@ -154,7 +154,7 @@ jobs:
           output-format: sarif
 
       - name: Upload SARIF to GitHub Security
-        uses: github/codeql-action/upload-sarif@v3
+        uses: github/codeql-action/upload-sarif@v4
         if: always()
         with:
           sarif_file: ${{ steps.scan.outputs.sarif }}
@@ -177,16 +177,16 @@ jobs:
 
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
 
       - name: Download Docker images
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v7
         with:
           name: docker-images
           path: images/
 
       - name: Download SBOMs
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v7
         with:
           name: sboms
           path: sboms/
@@ -231,7 +231,7 @@ jobs:
           echo "digest=$DIGEST" >> $GITHUB_OUTPUT
 
       - name: Generate SBOM attestation
-        uses: actions/attest-sbom@v2
+        uses: actions/attest-sbom@v3
         if: steps.push.outputs.digest != ''
         with:
           subject-name: ${{ env.REGISTRY }}/${{ env.IMAGE_PREFIX }}/${{ matrix.service }}
@@ -249,10 +249,10 @@ jobs:
 
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
 
       - name: Download SBOMs
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v7
         with:
           name: sboms
           path: sboms/
