@@ -1,0 +1,207 @@
+{
+  "bomFormat": "CycloneDX",
+  "specVersion": "1.4",
+  "version": 1,
+  "serialNumber": "urn:uuid:86c7a7f4-4875-4344-a77b-d71d6064d989",
+  "metadata": {
+    "timestamp": "2025-12-24T23:00:52.359971+00:00",
+    "properties": [
+      {
+        "name": "sbom_type",
+        "value": "runtime_only"
+      }
+    ],
+    "tools": [
+      {
+        "vendor": "TII",
+        "name": "sbomnix",
+        "version": "1.7.4"
+      }
+    ],
+    "component": {
+      "type": "library",
+      "bom-ref": "/nix/store/13zcxx6fcdvh97h5zdng1zdfg3wriz8f-api-gateway-0.1.0.drv",
+      "name": "api-gateway",
+      "version": "0.1.0",
+      "purl": "pkg:nix/api-gateway@0.1.0",
+      "cpe": "cpe:2.3:a:api-gateway:api-gateway:0.1.0:*:*:*:*:*:*:*",
+      "properties": [
+        {
+          "name": "nix:output_path",
+          "value": "/nix/store/r45jbfrsxy633p02vl9fldxkdnfsismv-api-gateway-0.1.0"
+        },
+        {
+          "name": "nix:drv_path",
+          "value": "/nix/store/13zcxx6fcdvh97h5zdng1zdfg3wriz8f-api-gateway-0.1.0.drv"
+        }
+      ]
+    }
+  },
+  "components": [
+    {
+      "type": "library",
+      "bom-ref": "/nix/store/00c0baahgmmfk4084rkv5jk0nw6f849b-glibc-2.40-66.drv",
+      "name": "glibc",
+      "version": "2.40-66",
+      "purl": "pkg:nix/glibc@2.40-66",
+      "cpe": "cpe:2.3:a:glibc:glibc:2.40-66:*:*:*:*:*:*:*",
+      "properties": [
+        {
+          "name": "nix:output_path",
+          "value": "/nix/store/xx7cm72qy2c0643cm1ipngd87aqwkcdp-glibc-2.40-66"
+        },
+        {
+          "name": "nix:drv_path",
+          "value": "/nix/store/00c0baahgmmfk4084rkv5jk0nw6f849b-glibc-2.40-66.drv"
+        }
+      ]
+    },
+    {
+      "type": "library",
+      "bom-ref": "/nix/store/4izp9xl3d63l5yzmcx7vw3ix8pkli22d-iana-etc-20250505.drv",
+      "name": "iana-etc",
+      "version": "20250505",
+      "purl": "pkg:nix/iana-etc@20250505",
+      "cpe": "cpe:2.3:a:iana-etc:iana-etc:20250505:*:*:*:*:*:*:*",
+      "properties": [
+        {
+          "name": "nix:output_path",
+          "value": "/nix/store/148w3ssbgc4wf6xcp6j0s5vy5mz41i8y-iana-etc-20250505"
+        },
+        {
+          "name": "nix:drv_path",
+          "value": "/nix/store/4izp9xl3d63l5yzmcx7vw3ix8pkli22d-iana-etc-20250505.drv"
+        }
+      ]
+    },
+    {
+      "type": "library",
+      "bom-ref": "/nix/store/2zw1y1l2isiv9ww10bdiczbxgqnfmrgr-libidn2-2.3.8.drv",
+      "name": "libidn2",
+      "version": "2.3.8",
+      "purl": "pkg:nix/libidn2@2.3.8",
+      "cpe": "cpe:2.3:a:gnu:libidn2:2.3.8:*:*:*:*:*:*:*",
+      "properties": [
+        {
+          "name": "nix:output_path",
+          "value": "/nix/store/hxcmad417fd8ql9ylx96xpak7da06yiv-libidn2-2.3.8"
+        },
+        {
+          "name": "nix:drv_path",
+          "value": "/nix/store/2zw1y1l2isiv9ww10bdiczbxgqnfmrgr-libidn2-2.3.8.drv"
+        }
+      ]
+    },
+    {
+      "type": "library",
+      "bom-ref": "/nix/store/2gy21xcjpq5q29crsy10vsv2m5f2513w-libunistring-1.4.1.drv",
+      "name": "libunistring",
+      "version": "1.4.1",
+      "purl": "pkg:nix/libunistring@1.4.1",
+      "cpe": "cpe:2.3:a:libunistring:libunistring:1.4.1:*:*:*:*:*:*:*",
+      "properties": [
+        {
+          "name": "nix:output_path",
+          "value": "/nix/store/3rkccxj7vi0p2a0d48c4a4z2vv2cni88-libunistring-1.4.1"
+        },
+        {
+          "name": "nix:drv_path",
+          "value": "/nix/store/2gy21xcjpq5q29crsy10vsv2m5f2513w-libunistring-1.4.1.drv"
+        }
+      ]
+    },
+    {
+      "type": "library",
+      "bom-ref": "/nix/store/4hyvslv8s989h540n4gp6yjvbrsp96kv-mailcap-2.1.54.drv",
+      "name": "mailcap",
+      "version": "2.1.54",
+      "purl": "pkg:nix/mailcap@2.1.54",
+      "cpe": "cpe:2.3:a:mailcap:mailcap:2.1.54:*:*:*:*:*:*:*",
+      "properties": [
+        {
+          "name": "nix:output_path",
+          "value": "/nix/store/g4z9m2pl1wcv35yzgjg1934gmj83gx9m-mailcap-2.1.54"
+        },
+        {
+          "name": "nix:drv_path",
+          "value": "/nix/store/4hyvslv8s989h540n4gp6yjvbrsp96kv-mailcap-2.1.54.drv"
+        }
+      ]
+    },
+    {
+      "type": "library",
+      "bom-ref": "/nix/store/1hb6iwm02cdzlpfy55f0habwqv4i48f3-tzdata-2025b.drv",
+      "name": "tzdata",
+      "version": "2025b",
+      "purl": "pkg:nix/tzdata@2025b",
+      "cpe": "cpe:2.3:a:tzdata:tzdata:2025b:*:*:*:*:*:*:*",
+      "properties": [
+        {
+          "name": "nix:output_path",
+          "value": "/nix/store/xaa75rd44q62nc9mrbvym9d1m6gy0fj8-tzdata-2025b"
+        },
+        {
+          "name": "nix:drv_path",
+          "value": "/nix/store/1hb6iwm02cdzlpfy55f0habwqv4i48f3-tzdata-2025b.drv"
+        }
+      ]
+    },
+    {
+      "type": "library",
+      "bom-ref": "/nix/store/bm5kzm1lv0dkrznzc79zl5rwbv71460w-xgcc-14.3.0.drv",
+      "name": "xgcc",
+      "version": "14.3.0",
+      "purl": "pkg:nix/xgcc@14.3.0",
+      "cpe": "cpe:2.3:a:xgcc:xgcc:14.3.0:*:*:*:*:*:*:*",
+      "properties": [
+        {
+          "name": "nix:output_path",
+          "value": "/nix/store/2a3izq4hffdd9r9gb2w6q2ibdc86kss6-xgcc-14.3.0-libgcc"
+        },
+        {
+          "name": "nix:drv_path",
+          "value": "/nix/store/bm5kzm1lv0dkrznzc79zl5rwbv71460w-xgcc-14.3.0.drv"
+        }
+      ]
+    }
+  ],
+  "dependencies": [
+    {
+      "ref": "/nix/store/13zcxx6fcdvh97h5zdng1zdfg3wriz8f-api-gateway-0.1.0.drv",
+      "dependsOn": [
+        "/nix/store/00c0baahgmmfk4084rkv5jk0nw6f849b-glibc-2.40-66.drv",
+        "/nix/store/1hb6iwm02cdzlpfy55f0habwqv4i48f3-tzdata-2025b.drv",
+        "/nix/store/4hyvslv8s989h540n4gp6yjvbrsp96kv-mailcap-2.1.54.drv",
+        "/nix/store/4izp9xl3d63l5yzmcx7vw3ix8pkli22d-iana-etc-20250505.drv"
+      ]
+    },
+    {
+      "ref": "/nix/store/00c0baahgmmfk4084rkv5jk0nw6f849b-glibc-2.40-66.drv",
+      "dependsOn": [
+        "/nix/store/2zw1y1l2isiv9ww10bdiczbxgqnfmrgr-libidn2-2.3.8.drv",
+        "/nix/store/bm5kzm1lv0dkrznzc79zl5rwbv71460w-xgcc-14.3.0.drv"
+      ]
+    },
+    {
+      "ref": "/nix/store/4izp9xl3d63l5yzmcx7vw3ix8pkli22d-iana-etc-20250505.drv"
+    },
+    {
+      "ref": "/nix/store/2zw1y1l2isiv9ww10bdiczbxgqnfmrgr-libidn2-2.3.8.drv",
+      "dependsOn": [
+        "/nix/store/2gy21xcjpq5q29crsy10vsv2m5f2513w-libunistring-1.4.1.drv"
+      ]
+    },
+    {
+      "ref": "/nix/store/2gy21xcjpq5q29crsy10vsv2m5f2513w-libunistring-1.4.1.drv"
+    },
+    {
+      "ref": "/nix/store/4hyvslv8s989h540n4gp6yjvbrsp96kv-mailcap-2.1.54.drv"
+    },
+    {
+      "ref": "/nix/store/1hb6iwm02cdzlpfy55f0habwqv4i48f3-tzdata-2025b.drv"
+    },
+    {
+      "ref": "/nix/store/bm5kzm1lv0dkrznzc79zl5rwbv71460w-xgcc-14.3.0.drv"
+    }
+  ]
+}
