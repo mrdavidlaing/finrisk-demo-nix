@@ -1,0 +1,57 @@
+services:
+  api-gateway:
+    image: transferx/api-gateway:latest
+    ports:
+      - "8080:8080"
+    environment:
+      - KYC_SERVICE_URL=http://kyc-service:8081
+      - FEE_SERVICE_URL=http://fee-service:8082
+      - SANCTIONS_SERVICE_URL=http://sanctions-service:8083
+      - CRYPTO_SERVICE_URL=http://crypto-transfer:8085
+      - AUDIT_SERVICE_URL=http://audit-service:8084
+    volumes:
+      - ./compliance:/data/compliance
+    depends_on:
+      - kyc-service
+      - fee-service
+      - sanctions-service
+      - crypto-transfer
+      - audit-service
+
+  kyc-service:
+    image: transferx/kyc-service:latest
+    ports:
+      - "8081:8081"
+
+  fee-service:
+    image: transferx/fee-service:latest
+    ports:
+      - "8082:8082"
+
+  sanctions-service:
+    image: transferx/sanctions-service:latest
+    ports:
+      - "8083:8083"
+    environment:
+      - JAVA_OPTS=-Xmx512m
+
+  crypto-transfer:
+    image: transferx/crypto-transfer:latest
+    ports:
+      - "8085:8085"
+
+  audit-service:
+    image: transferx/audit-service:latest
+    ports:
+      - "8084:8084"
+    volumes:
+      - ./compliance/audit:/tmp/transferx-audit
+
+  web-portal:
+    image: transferx/web-portal:latest
+    ports:
+      - "3000:3000"
+    environment:
+      - NEXT_PUBLIC_API_URL=http://localhost:8080
+    depends_on:
+      - api-gateway

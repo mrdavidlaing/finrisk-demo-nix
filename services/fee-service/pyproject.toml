@@ -1,0 +1,23 @@
+[tool.poetry]
+name = "fee-service"
+version = "0.1.0"
+description = "Transfer fee calculation service"
+authors = ["TransferX Team"]
+
+[tool.poetry.dependencies]
+python = "^3.11"
+fastapi = "^0.104.0"
+uvicorn = {extras = ["standard"], version = "^0.24.0"}
+pydantic = ">=1.10.13,<2"
+requests = "2.25.1"
+urllib3 = "1.26.4"
+
+[tool.poetry.group.dev.dependencies]
+pytest = "^7.4.0"
+
+[tool.poetry.scripts]
+fee-service = "fee_service.main:start"
+
+[build-system]
+requires = ["poetry-core"]
+build-backend = "poetry.core.masonry.api"

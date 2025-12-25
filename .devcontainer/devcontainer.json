@@ -1,0 +1,51 @@
+{
+  "name": "TransferX Development Environment",
+  "image": "mcr.microsoft.com/devcontainers/base:ubuntu",
+  "features": {
+    "ghcr.io/devcontainers/features/nix:1": {
+      "version": "latest"
+    },
+    "ghcr.io/devcontainers/features/node:1": {
+      "version": "20"
+    },
+    "ghcr.io/devcontainers/features/go:1": {
+      "version": "latest"
+    },
+    "ghcr.io/devcontainers/features/dotnet:1": {
+      "version": "8.0"
+    },
+    "ghcr.io/devcontainers/features/python:1": {
+      "version": "3.11"
+    },
+    "ghcr.io/devcontainers/features/java:1": {
+      "version": "17",
+      "jdkDistro": "ms"
+    },
+    "ghcr.io/devcontainers/features/rust:1": {
+      "version": "latest"
+    }
+  },
+  "postCreateCommand": "nix develop --extra-experimental-features 'nix-command flakes'",
+  "forwardPorts": [3000, 8080, 8081, 8082, 8083, 8084, 8085],
+  "customizations": {
+    "vscode": {
+      "extensions": [
+        "ms-vscode-remote.remote-containers",
+        "jnoortheen.nix-ide",
+        "golang.go",
+        "ms-dotnettools.csharp",
+        "ms-python.python",
+        "vscjava.vscode-java-pack",
+        "rust-lang.rust-analyzer",
+        "bradlc.vscode-tailwindcss"
+      ],
+      "settings": {
+        "nix.enableLanguageServer": true,
+        "nix.serverPath": "nixd"
+      }
+    }
+  },
+  "remoteUser": "vscode"
+}
+
+

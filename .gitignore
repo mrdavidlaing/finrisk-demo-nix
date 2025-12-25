@@ -1,0 +1,55 @@
+# Nix
+result
+result-*
+.direnv
+http_cache.sqlite
+
+# Node
+node_modules/
+.next/
+*.log
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+.pytest_cache/
+*.egg-info/
+
+# .NET
+bin/
+obj/
+*.dll
+*.exe
+
+# Java
+target/
+*.class
+*.jar
+
+# Rust
+target/
+
+# Go
+*.exe
+*.test
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Compliance outputs
+compliance/sboms/*.json
+compliance/vulns/*.json
+vulns-*.json
+
+# Docker
+*.tar
+
+# OS
+.DS_Store
+Thumbs.db
+
+
