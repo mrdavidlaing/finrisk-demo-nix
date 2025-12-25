@@ -11,6 +11,9 @@ jobs:
     permissions:
       contents: read
       pull-requests: write
+    env:
+      # Explicitly disable FlakeHub registration
+      FLAKEHUB_PUBLISH: "0"
 
     steps:
       - name: Checkout repository
