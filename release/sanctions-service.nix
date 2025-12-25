@@ -55,7 +55,7 @@ let
     # 1. Comment out or remove the outputHash line below
     # 2. Run: nix build -L .#sanctions-service 2>&1 | grep "got:"
     # 3. Update outputHash with the hash from the error message
-    outputHash = "sha256-Wen+vA66gl5fJrDABw5kCiUWGATKEoSxe3NQn9hyVeQ=";
+    outputHash = "sha256-UVBsE1PehJ0gknJuvaYzi4odBiv/+HjedhHQIVkFrp4=";
     outputHashMode = "recursive";
   };
 
