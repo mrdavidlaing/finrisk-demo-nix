@@ -79,12 +79,17 @@ jobs:
       - name: Set services list
         id: set-services
         run: |
-          echo 'services=["api-gateway","kyc-service","fee-service","sanctions-service","swift-gateway","crypto-transfer","audit-service","web-portal"]' >> $GITHUB_OUTPUT
+          SERVICES_JSON='["api-gateway","kyc-service","fee-service","sanctions-service","swift-gateway","crypto-transfer","audit-service","web-portal","smoke-tests"]'
+          echo "services=$SERVICES_JSON" >> $GITHUB_OUTPUT
+          # Also set as space-separated for shell loops (trim trailing space)
+          SERVICES_LIST=$(echo $SERVICES_JSON | jq -r '.[]' | tr '\n' ' ' | xargs)
+          echo "services_list=$SERVICES_LIST" >> $GITHUB_OUTPUT
 
       - name: Generate SBOMs
         run: |
           mkdir -p sboms
-          SERVICES="api-gateway kyc-service fee-service sanctions-service swift-gateway crypto-transfer audit-service web-portal"
+          # Use the space-separated list from the previous step
+          SERVICES='${{ steps.set-services.outputs.services_list }}'
           for service in $SERVICES; do
             echo "Generating SBOM for $service..."
             syft "transferx/$service:latest" -o cyclonedx-json --file "sboms/$service.cdx.json"
@@ -303,4 +308,5 @@ jobs:
           echo "- crypto-transfer (Rust)" >> $GITHUB_STEP_SUMMARY
           echo "- audit-service (Perl)" >> $GITHUB_STEP_SUMMARY
           echo "- web-portal (Next.js)" >> $GITHUB_STEP_SUMMARY
+          echo "- smoke-tests (Ruby/Cucumber)" >> $GITHUB_STEP_SUMMARY
 

@@ -13,22 +13,49 @@ let
     
     nativeBuildInputs = [ jdk17 maven ];
     
+    # Set environment variables for deterministic Maven builds
+    preBuild = ''
+      export MAVEN_OPTS="-Dmaven.repo.local=$out/.m2/repository"
+      export SOURCE_DATE_EPOCH=1
+    '';
+    
     buildPhase = ''
       # Set up a local repository
       mkdir -p $out/.m2/repository
       
-      # Perform a package build to download all dependencies and plugins
-      # We use a custom local repo path
-      mvn package -Dmaven.repo.local=$out/.m2/repository -DskipTests
+      # Download all dependencies and plugins deterministically
+      # Using validate phase ensures plugins are downloaded without building
+      mvn validate \
+        -Dmaven.repo.local=$out/.m2/repository \
+        -DskipTests \
+        --batch-mode \
+        --errors \
+        --fail-at-end
       
-      # Clean up the build artifacts from the deps derivation, keeping only the repo
+      # Also explicitly resolve dependencies and plugins to ensure completeness
+      mvn dependency:resolve dependency:resolve-plugins \
+        -Dmaven.repo.local=$out/.m2/repository \
+        --batch-mode \
+        --errors \
+        --fail-at-end || true
+      
+      # Clean up any non-deterministic metadata files
+      # Remove timestamp files and other metadata that can vary between builds
+      find $out/.m2/repository -name "*.lastUpdated" -delete || true
+      find $out/.m2/repository -name "_remote.repositories" -delete || true
+      
+      # Remove any build artifacts if they exist
       rm -rf target
     '';
     
     installPhase = "true";
     
     outputHashAlgo = "sha256";
-    outputHash = "sha256-Wen+vA66gl5fJrDABw5kCiUWGATKEoSxe3NQn9hyVeQ="; # To be updated
+    # To update the hash after making changes:
+    # 1. Comment out or remove the outputHash line below
+    # 2. Run: nix build -L .#sanctions-service 2>&1 | grep "got:"
+    # 3. Update outputHash with the hash from the error message
+    outputHash = "sha256-Wen+vA66gl5fJrDABw5kCiUWGATKEoSxe3NQn9hyVeQ=";
     outputHashMode = "recursive";
   };
 
