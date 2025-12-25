@@ -1,0 +1,180 @@
+name: PR Check
+
+on:
+  pull_request:
+    branches: [main, master]
+
+jobs:
+  build-check:
+    name: Build Check
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: write
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Install Nix
+        uses: DeterminateSystems/nix-installer-action@v14
+
+      - name: Setup Nix cache
+        uses: DeterminateSystems/magic-nix-cache-action@v8
+
+      - name: Check flake
+        run: nix flake check
+
+      - name: Build all services
+        run: nix build .#all-services --print-out-paths
+
+      - name: Build all Docker images
+        run: nix build .#all-images --print-out-paths
+
+  sbom-diff:
+    name: SBOM Diff Check
+    runs-on: ubuntu-latest
+    needs: build-check
+    permissions:
+      contents: read
+      pull-requests: write
+
+    steps:
+      - name: Checkout PR branch
+        uses: actions/checkout@v4
+
+      - name: Install Nix
+        uses: DeterminateSystems/nix-installer-action@v14
+
+      - name: Setup Nix cache
+        uses: DeterminateSystems/magic-nix-cache-action@v8
+
+      - name: Build and load images
+        run: |
+          nix build .#all-images
+          for img in result/*.tar.gz; do
+            docker load < "$img"
+          done
+
+      - name: Install Syft
+        uses: anchore/sbom-action/download-syft@v0
+
+      - name: Generate SBOMs for PR
+        run: |
+          mkdir -p pr-sboms
+          SERVICES="api-gateway kyc-service fee-service sanctions-service swift-gateway crypto-transfer audit-service web-portal"
+          for service in $SERVICES; do
+            syft "transferx/$service:latest" -o cyclonedx-json --file "pr-sboms/$service.cdx.json"
+          done
+
+      - name: Compare with base SBOMs
+        id: diff
+        run: |
+          echo "## SBOM Changes" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          
+          SERVICES="api-gateway kyc-service fee-service sanctions-service swift-gateway crypto-transfer audit-service web-portal"
+          HAS_CHANGES=false
+          
+          for service in $SERVICES; do
+            if [ -f "compliance/sboms/$service.cdx.json" ]; then
+              # Extract component counts
+              OLD_COUNT=$(jq '.components | length' "compliance/sboms/$service.cdx.json" 2>/dev/null || echo "0")
+              NEW_COUNT=$(jq '.components | length' "pr-sboms/$service.cdx.json" 2>/dev/null || echo "0")
+              
+              if [ "$OLD_COUNT" != "$NEW_COUNT" ]; then
+                HAS_CHANGES=true
+                DIFF=$((NEW_COUNT - OLD_COUNT))
+                if [ $DIFF -gt 0 ]; then
+                  echo "- **$service**: +$DIFF dependencies ($OLD_COUNT → $NEW_COUNT)" >> $GITHUB_STEP_SUMMARY
+                else
+                  echo "- **$service**: $DIFF dependencies ($OLD_COUNT → $NEW_COUNT)" >> $GITHUB_STEP_SUMMARY
+                fi
+              fi
+            else
+              echo "- **$service**: New service (no baseline SBOM)" >> $GITHUB_STEP_SUMMARY
+              HAS_CHANGES=true
+            fi
+          done
+          
+          if [ "$HAS_CHANGES" = false ]; then
+            echo "No dependency changes detected." >> $GITHUB_STEP_SUMMARY
+          fi
+
+      - name: Upload PR SBOMs
+        uses: actions/upload-artifact@v4
+        with:
+          name: pr-sboms
+          path: pr-sboms/
+          retention-days: 7
+
+  license-check:
+    name: License Compliance Check
+    runs-on: ubuntu-latest
+    needs: build-check
+    permissions:
+      contents: read
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Install Nix
+        uses: DeterminateSystems/nix-installer-action@v14
+
+      - name: Setup Nix cache
+        uses: DeterminateSystems/magic-nix-cache-action@v8
+
+      - name: Build and load images
+        run: |
+          nix build .#all-images
+          for img in result/*.tar.gz; do
+            docker load < "$img"
+          done
+
+      - name: Install Syft
+        uses: anchore/sbom-action/download-syft@v0
+
+      - name: Check licenses
+        run: |
+          echo "## License Compliance Report" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          
+          # Define problematic licenses
+          FORBIDDEN_LICENSES="GPL-3.0 AGPL-3.0 SSPL"
+          
+          SERVICES="api-gateway kyc-service fee-service sanctions-service swift-gateway crypto-transfer audit-service web-portal"
+          ALL_CLEAR=true
+          
+          for service in $SERVICES; do
+            echo "### $service" >> $GITHUB_STEP_SUMMARY
+            
+            # Generate SBOM with license info
+            SBOM=$(syft "transferx/$service:latest" -o json 2>/dev/null)
+            
+            # Extract licenses
+            LICENSES=$(echo "$SBOM" | jq -r '.artifacts[].licenses[]?.value // empty' 2>/dev/null | sort -u)
+            
+            if [ -z "$LICENSES" ]; then
+              echo "No license information found." >> $GITHUB_STEP_SUMMARY
+            else
+              FOUND_FORBIDDEN=false
+              for license in $FORBIDDEN_LICENSES; do
+                if echo "$LICENSES" | grep -q "$license"; then
+                  echo "⚠️ Found potentially problematic license: $license" >> $GITHUB_STEP_SUMMARY
+                  FOUND_FORBIDDEN=true
+                  ALL_CLEAR=false
+                fi
+              done
+              
+              if [ "$FOUND_FORBIDDEN" = false ]; then
+                echo "✅ No problematic licenses detected" >> $GITHUB_STEP_SUMMARY
+              fi
+            fi
+            echo "" >> $GITHUB_STEP_SUMMARY
+          done
+          
+          if [ "$ALL_CLEAR" = false ]; then
+            echo "::warning::Some services contain potentially problematic licenses. Please review."
+          fi
+

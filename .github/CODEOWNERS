@@ -1,0 +1,27 @@
+# TransferX CODEOWNERS
+# Security-sensitive files require additional review
+
+# Default owners for everything
+* @transferx/maintainers
+
+# CI/CD workflows require security review
+/.github/ @transferx/security @transferx/maintainers
+
+# Nix configurations - supply chain security
+/flake.nix @transferx/security @transferx/maintainers
+/flake.lock @transferx/security @transferx/maintainers
+/nix/ @transferx/security @transferx/maintainers
+
+# Compliance artifacts
+/compliance/ @transferx/security @transferx/compliance
+
+# Service-specific owners
+/services/api-gateway/ @transferx/backend
+/services/kyc-service/ @transferx/backend
+/services/fee-service/ @transferx/backend
+/services/sanctions-service/ @transferx/backend @transferx/compliance
+/services/swift-gateway/ @transferx/backend @transferx/payments
+/services/crypto-transfer/ @transferx/backend @transferx/crypto
+/services/audit-service/ @transferx/backend @transferx/compliance
+/services/web-portal/ @transferx/frontend
+

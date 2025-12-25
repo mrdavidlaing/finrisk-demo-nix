@@ -1,0 +1,78 @@
+version: 2
+updates:
+  # GitHub Actions
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+    groups:
+      actions:
+        patterns:
+          - "*"
+
+  # Go - API Gateway
+  - package-ecosystem: "gomod"
+    directory: "/services/api-gateway"
+    schedule:
+      interval: "weekly"
+    groups:
+      go-deps:
+        patterns:
+          - "*"
+
+  # Rust - Crypto Transfer
+  - package-ecosystem: "cargo"
+    directory: "/services/crypto-transfer"
+    schedule:
+      interval: "weekly"
+    groups:
+      rust-deps:
+        patterns:
+          - "*"
+
+  # Python - Fee Service
+  - package-ecosystem: "pip"
+    directory: "/services/fee-service"
+    schedule:
+      interval: "weekly"
+    groups:
+      python-deps:
+        patterns:
+          - "*"
+
+  # .NET - KYC Service
+  - package-ecosystem: "nuget"
+    directory: "/services/kyc-service"
+    schedule:
+      interval: "weekly"
+    groups:
+      dotnet-deps:
+        patterns:
+          - "*"
+
+  # Java/Maven - Sanctions Service
+  - package-ecosystem: "maven"
+    directory: "/services/sanctions-service"
+    schedule:
+      interval: "weekly"
+    groups:
+      java-deps:
+        patterns:
+          - "*"
+
+  # npm - Web Portal
+  - package-ecosystem: "npm"
+    directory: "/services/web-portal"
+    schedule:
+      interval: "weekly"
+    groups:
+      npm-deps:
+        patterns:
+          - "*"
+
+  # Nix flake inputs
+  - package-ecosystem: "nix"
+    directory: "/"
+    schedule:
+      interval: "monthly"
+
