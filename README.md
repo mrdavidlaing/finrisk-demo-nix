@@ -175,6 +175,59 @@ Each service uses native Nix builders:
 - **COBOL**: `stdenv.mkDerivation` with GnuCOBOL
 - **Rust**: `rustPlatform.buildRustPackage`
 - **Next.js**: `buildNpmPackage`
+- **Ruby**: `bundlerEnv` with `bundix`-generated `gemset.nix`
+
+### Updating Dependencies
+
+#### Ruby (smoke-tests)
+
+Ruby gems use `bundix` to generate a `gemset.nix` file with pinned SHA256 hashes for fully deterministic builds.
+
+**To update gems:**
+
+```bash
+cd services/smoke-tests
+
+# Update Gemfile with new version constraints (if needed)
+# Then regenerate Gemfile.lock
+bundle lock --update
+
+# Regenerate gemset.nix with new hashes
+nix run nixpkgs#bundix -- -l
+
+# Verify the build works
+cd ../..
+nix build .#smoke-tests
+
+# Commit the changes
+git add services/smoke-tests/Gemfile.lock services/smoke-tests/gemset.nix
+git commit -m "chore: Update Ruby gem dependencies"
+```
+
+**To add a new gem:**
+
+```bash
+cd services/smoke-tests
+
+# Add to Gemfile
+echo "gem 'new-gem', '~> 1.0'" >> Gemfile
+
+# Generate Gemfile.lock
+bundle lock
+
+# Regenerate gemset.nix
+nix run nixpkgs#bundix -- -l
+
+# Commit
+git add Gemfile Gemfile.lock gemset.nix
+```
+
+#### Other Languages
+
+- **Go**: Update `go.mod`, run `go mod tidy`, Nix will fetch new `vendorHash`
+- **Rust**: Update `Cargo.toml`, run `cargo update`, Nix uses `cargoHash`
+- **Python**: Update `pyproject.toml`, run `poetry lock`
+- **Node.js**: Update `package.json`, run `npm install`, commit `package-lock.json`
 
 ## Development
 
