@@ -227,11 +227,13 @@ jobs:
         run: |
           SOURCE_IMAGE="transferx/${{ matrix.service }}:latest"
           
-          # Tag with all metadata tags
-          for tag in ${{ steps.meta.outputs.tags }}; do
-            echo "Tagging $SOURCE_IMAGE as $tag"
-            docker tag "$SOURCE_IMAGE" "$tag"
-            docker push "$tag"
+          # Tag with all metadata tags (handle newline-separated tags)
+          echo "${{ steps.meta.outputs.tags }}" | while IFS= read -r tag; do
+            if [ -n "$tag" ]; then
+              echo "Tagging $SOURCE_IMAGE as $tag"
+              docker tag "$SOURCE_IMAGE" "$tag"
+              docker push "$tag"
+            fi
           done
           
           # Get the digest of the pushed image
