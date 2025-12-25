@@ -3,22 +3,80 @@ require 'open3'
 require 'time'
 
 class CucumberJsonRunner
+  # #region agent log
+  def self._agent_log(hypothesis_id:, location:, message:, data: {}, run_id: nil)
+    log_path = ENV['DEBUG_LOG_PATH'] || '/home/mrdavidlaing/Work/finrisk-demo-nix/.cursor/debug.log'
+    payload = {
+      id: "log_#{Time.now.to_f}_#{rand(1000)}",
+      timestamp: (Time.now.to_f * 1000).to_i,
+      sessionId: 'debug-session',
+      runId: run_id || (ENV['DEBUG_RUN_ID'] || 'pre-fix'),
+      hypothesisId: hypothesis_id,
+      location: location,
+      message: message,
+      data: data
+    }
+    File.open(log_path, 'a') { |f| f.puts(payload.to_json) }
+  rescue
+    # never break smoke-tests if logging fails
+  end
+  # #endregion agent log
+
   def self.run
     start_time = Time.now
     
     # Run cucumber with JSON formatter
+    # #region agent log
+    _agent_log(
+      hypothesis_id: 'H1',
+      location: 'lib/cucumber_json_runner.rb:run:pre_capture2',
+      message: 'Starting cucumber run',
+      data: {
+        pwd: Dir.pwd,
+        api_gateway_url: (ENV['API_GATEWAY_URL'] || 'http://localhost:8080')
+      }
+    )
+    # #endregion agent log
+
     json_output, status = Open3.capture2(
       { 'API_GATEWAY_URL' => ENV['API_GATEWAY_URL'] || 'http://localhost:8080' },
       'bundle', 'exec', 'cucumber', 
+      '--no-profile',
       '--format', 'json', '--out', '/tmp/cucumber_results.json',
       '--format', 'pretty', '--no-strict'
     )
     
     duration = Time.now - start_time
+
+    # #region agent log
+    _agent_log(
+      hypothesis_id: 'H1',
+      location: 'lib/cucumber_json_runner.rb:run:post_capture2',
+      message: 'Cucumber exited',
+      data: {
+        exit_status: (status.respond_to?(:exitstatus) ? status.exitstatus : nil),
+        success: status.success?,
+        stdout_snippet: json_output.to_s[0, 800]
+      }
+    )
+    # #endregion agent log
     
     # Parse JSON results
     json_data = File.read('/tmp/cucumber_results.json') rescue '[]'
     cucumber_results = JSON.parse(json_data) rescue []
+
+    # #region agent log
+    _agent_log(
+      hypothesis_id: 'H1',
+      location: 'lib/cucumber_json_runner.rb:run:post_parse',
+      message: 'Parsed cucumber JSON',
+      data: {
+        json_path: '/tmp/cucumber_results.json',
+        json_bytes: json_data.to_s.bytesize,
+        feature_count: cucumber_results.is_a?(Array) ? cucumber_results.length : -1
+      }
+    )
+    # #endregion agent log
     
     # Transform to our format
     transform_results(cucumber_results, duration, status.success?)

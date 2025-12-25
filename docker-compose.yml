@@ -9,6 +9,7 @@ services:
       - SANCTIONS_SERVICE_URL=http://sanctions-service:8083
       - CRYPTO_SERVICE_URL=http://crypto-transfer:8085
       - AUDIT_SERVICE_URL=http://audit-service:8084
+      - SWIFT_GATEWAY_URL=http://swift-gateway:8086
       - SMOKE_TESTS_URL=http://smoke-tests:8090
     volumes:
       - ./compliance:/data/compliance
@@ -18,6 +19,7 @@ services:
       - sanctions-service
       - crypto-transfer
       - audit-service
+      - swift-gateway
 
   smoke-tests:
     image: transferx/smoke-tests:latest
@@ -25,6 +27,10 @@ services:
       - "8090:8090"
     environment:
       - API_GATEWAY_URL=http://api-gateway:8080
+      - DEBUG_LOG_PATH=/home/mrdavidlaing/Work/finrisk-demo-nix/.cursor/debug.log
+      - DEBUG_RUN_ID=pre-fix
+    volumes:
+      - ./.cursor:/home/mrdavidlaing/Work/finrisk-demo-nix/.cursor
     depends_on:
       - api-gateway
       - kyc-service
@@ -61,6 +67,11 @@ services:
       - "8084:8084"
     volumes:
       - ./compliance/audit:/tmp/transferx-audit
+
+  swift-gateway:
+    image: transferx/swift-gateway:latest
+    ports:
+      - "8086:8086"
 
   web-portal:
     image: transferx/web-portal:latest

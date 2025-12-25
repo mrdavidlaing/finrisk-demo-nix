@@ -72,8 +72,16 @@ async fn create_transfer(
     Json(payload): Json<TransferRequest>,
 ) -> Result<Json<serde_json::Value>, StatusCode> {
     if payload.amount <= 0.0 {
+        eprintln!("[crypto-transfer] Invalid transfer request: amount must be positive, got {}", payload.amount);
         return Err(StatusCode::BAD_REQUEST);
     }
+
+    println!("[crypto-transfer] Processing transfer: from={}, to={}, amount={}, currency={}", 
+        payload.from, 
+        payload.to, 
+        payload.amount,
+        payload.currency.as_ref().unwrap_or(&"USDT".to_string())
+    );
 
     // Generate mock transaction hash
     let tx_hash = format!("0x{:x}", 
@@ -85,10 +93,10 @@ async fn create_transfer(
 
     let transfer = Transfer {
         tx_hash: tx_hash.clone(),
-        from: payload.from,
-        to: payload.to,
+        from: payload.from.clone(),
+        to: payload.to.clone(),
         amount: payload.amount,
-        currency: payload.currency.unwrap_or_else(|| "USDT".to_string()),
+        currency: payload.currency.clone().unwrap_or_else(|| "USDT".to_string()),
         status: "pending".to_string(),
         created_at: std::time::SystemTime::now()
             .duration_since(std::time::UNIX_EPOCH)
@@ -100,6 +108,9 @@ async fn create_transfer(
         let mut transfers = state.write().unwrap();
         transfers.insert(tx_hash.clone(), transfer);
     }
+
+    println!("[crypto-transfer] Transfer created successfully: txHash={}, from={}, to={}, amount={}", 
+        tx_hash, payload.from, payload.to, payload.amount);
 
     Ok(Json(serde_json::json!({
         "txHash": tx_hash,

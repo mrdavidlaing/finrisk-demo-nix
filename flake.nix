@@ -87,12 +87,16 @@
           name = "transferx/swift-gateway";
           tag = "latest";
           extraCommands = ''
-            mkdir -p tmp
+            mkdir -p tmp bin
             chmod 1777 tmp
+            # Copy both binaries to /bin for easy access
+            cp ${swift-gateway}/bin/mt103-generator bin/
+            cp ${swift-gateway}/bin/swift-gateway-server bin/
           '';
           config = {
-            Cmd = [ "${swift-gateway}/bin/swift-gateway" ];
-            Env = [ "HOME=/tmp" "TMPDIR=/tmp" ];
+            Cmd = [ "/bin/swift-gateway-server" ];
+            ExposedPorts = { "8086/tcp" = {}; };
+            Env = [ "HOME=/tmp" "TMPDIR=/tmp" "PORT=8086" "PATH=/bin" ];
           };
         };
         

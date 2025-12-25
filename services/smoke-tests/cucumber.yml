@@ -1,2 +1,2 @@
-default: --format json --out /tmp/cucumber_results.json --format pretty --stdout
+default: --format json --out /tmp/cucumber_results.json --format pretty
 

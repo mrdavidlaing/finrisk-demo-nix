@@ -8,6 +8,11 @@ use warnings;
 use JSON;
 use IO::Socket::INET;
 
+# Enable auto-flush for stdout and stderr so logs appear in real-time
+$| = 1;
+STDOUT->autoflush(1);
+STDERR->autoflush(1);
+
 my $PORT = $ENV{PORT} || 8084;
 my $LOG_DIR = $ENV{LOG_DIR} || '/tmp/transferx-audit';
 
@@ -23,6 +28,7 @@ my $server = IO::Socket::INET->new(
 ) or die "Cannot create server socket: $!\n";
 
 print "Audit Service listening on port $PORT\n";
+STDOUT->flush();
 
 while (my $client = $server->accept()) {
     handle_client($client);
@@ -95,6 +101,7 @@ sub handle_log {
     
     my $data = eval { decode_json($json_text) };
     if ($@) {
+        print STDERR "[audit-service] ERROR: Invalid JSON in log request: $@\n";
         return encode_json({ error => 'Invalid JSON' });
     }
     
@@ -103,9 +110,8 @@ sub handle_log {
     my $date = scalar localtime();
     my $log_file = "$LOG_DIR/transactions.log";
     
-    open(my $fh, '>>', $log_file) or return encode_json({ error => "Cannot open log file: $!" });
-    print $fh sprintf(
-        "[%s] TRANSFER: %s -> %s, Amount: %.2f %s, Rail: %s, ID: %s\n",
+    my $log_entry = sprintf(
+        "[%s] TRANSFER: %s -> %s, Amount: %.2f %s, Rail: %s, ID: %s",
         $date,
         $data->{senderId} || 'unknown',
         $data->{recipientId} || 'unknown',
@@ -114,6 +120,18 @@ sub handle_log {
         $data->{rail} || 'UNKNOWN',
         $data->{transferId} || 'N/A'
     );
+    
+    # Log to stdout for docker logs (with flush to ensure real-time visibility)
+    print "[audit-service] $log_entry\n";
+    STDOUT->flush();
+    
+    # Also log to file
+    open(my $fh, '>>', $log_file) or do {
+        print STDERR "[audit-service] ERROR: Cannot open log file $log_file: $!\n";
+        STDERR->flush();
+        return encode_json({ error => "Cannot open log file: $!" });
+    };
+    print $fh "$log_entry\n";
     close($fh);
     
     return encode_json({

@@ -2,6 +2,8 @@ package com.transferx.sanctions;
 
 import org.springframework.web.bind.annotation.*;
 import org.springframework.http.ResponseEntity;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.time.Instant;
 import java.util.*;
@@ -9,6 +11,8 @@ import java.util.*;
 @RestController
 @RequestMapping("/")
 public class SanctionsController {
+
+    private static final Logger logger = LoggerFactory.getLogger(SanctionsController.class);
 
     // Mock sanctions lists (in production, this would query external databases)
     private static final Set<String> OFAC_LIST = Set.of(
@@ -29,6 +33,9 @@ public class SanctionsController {
 
     @PostMapping("/screen")
     public ResponseEntity<ScreenResponse> screen(@RequestBody ScreenRequest request) {
+        logger.info("Sanctions screening request: senderId={}, recipientId={}, amount={}", 
+            request.getSenderId(), request.getRecipientId(), request.getAmount());
+        
         List<String> matchedLists = new ArrayList<>();
         int riskScore = 0;
 
@@ -37,6 +44,8 @@ public class SanctionsController {
             OFAC_LIST.contains(request.getRecipientId())) {
             matchedLists.add("OFAC");
             riskScore += 50;
+            logger.warn("OFAC match detected: senderId={}, recipientId={}", 
+                request.getSenderId(), request.getRecipientId());
         }
 
         // Check PEP list
@@ -44,11 +53,14 @@ public class SanctionsController {
             PEP_LIST.contains(request.getRecipientId())) {
             matchedLists.add("PEP");
             riskScore += 30;
+            logger.info("PEP match detected: senderId={}, recipientId={}", 
+                request.getSenderId(), request.getRecipientId());
         }
 
         // High-value transaction risk
         if (request.getAmount() > 100000) {
             riskScore += 20;
+            logger.info("High-value transaction detected: amount={}", request.getAmount());
         }
 
         boolean cleared = matchedLists.isEmpty() && riskScore < 50;
@@ -58,6 +70,9 @@ public class SanctionsController {
         response.setMatchedLists(matchedLists);
         response.setRiskScore(Math.min(100, riskScore));
         response.setScreenedAt(Instant.now());
+
+        logger.info("Sanctions screening result: cleared={}, riskScore={}, matchedLists={}", 
+            cleared, riskScore, matchedLists);
 
         return ResponseEntity.ok(response);
     }

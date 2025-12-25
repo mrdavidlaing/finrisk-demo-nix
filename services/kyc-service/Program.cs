@@ -69,7 +69,7 @@ app.MapGet("/status/{userId}", (string userId) =>
 .WithName("GetStatus")
 .WithOpenApi();
 
-app.Run("http://localhost:8081");
+app.Run("http://0.0.0.0:8081");
 
 public record VerifyRequest
 {

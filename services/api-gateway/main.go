@@ -63,13 +63,13 @@ type GrypeReport struct {
 }
 
 var (
-	kycServiceURL    = getEnv("KYC_SERVICE_URL", "http://localhost:8081")
-	feeServiceURL    = getEnv("FEE_SERVICE_URL", "http://localhost:8082")
+	kycServiceURL      = getEnv("KYC_SERVICE_URL", "http://localhost:8081")
+	feeServiceURL      = getEnv("FEE_SERVICE_URL", "http://localhost:8082")
 	sanctionsServiceURL = getEnv("SANCTIONS_SERVICE_URL", "http://localhost:8083")
-	swiftGatewayPath = getEnv("SWIFT_GATEWAY_PATH", "./swift-gateway")
-	cryptoServiceURL = getEnv("CRYPTO_SERVICE_URL", "http://localhost:8085")
-	auditServiceURL  = getEnv("AUDIT_SERVICE_URL", "http://localhost:8084")
-	smokeTestsURL    = getEnv("SMOKE_TESTS_URL", "http://localhost:8090")
+	swiftGatewayURL    = getEnv("SWIFT_GATEWAY_URL", "http://localhost:8086")
+	cryptoServiceURL   = getEnv("CRYPTO_SERVICE_URL", "http://localhost:8085")
+	auditServiceURL    = getEnv("AUDIT_SERVICE_URL", "http://localhost:8084")
+	smokeTestsURL      = getEnv("SMOKE_TESTS_URL", "http://localhost:8090")
 )
 
 func main() {
@@ -281,7 +281,10 @@ func verifyKYC(userID string) bool {
 }
 
 func screenSanctions(senderID, recipientID string, amount float64) bool {
-	// Mock: call sanctions-service
+	// Call sanctions-service
+	log.Printf("[api-gateway] Calling sanctions-service: senderId=%s, recipientId=%s, amount=%.2f", 
+		senderID, recipientID, amount)
+	
 	reqBody := map[string]interface{}{
 		"senderId":    senderID,
 		"recipientId": recipientID,
@@ -291,10 +294,32 @@ func screenSanctions(senderID, recipientID string, amount float64) bool {
 	resp, err := http.Post(fmt.Sprintf("%s/screen", sanctionsServiceURL), "application/json", 
 		bytes.NewBuffer(jsonData))
 	if err != nil {
+		log.Printf("[api-gateway] ERROR: Failed to call sanctions-service: %v", err)
 		return false
 	}
 	defer resp.Body.Close()
-	return resp.StatusCode == http.StatusOK
+	
+	if resp.StatusCode != http.StatusOK {
+		log.Printf("[api-gateway] ERROR: Sanctions-service returned status %d", resp.StatusCode)
+		return false
+	}
+	
+	// Parse response to check the cleared field
+	var result map[string]interface{}
+	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+		log.Printf("[api-gateway] ERROR: Failed to parse sanctions-service response: %v", err)
+		return false
+	}
+	
+	cleared, ok := result["cleared"].(bool)
+	if !ok {
+		// If cleared field is missing or not boolean, default to false (fail safe)
+		log.Printf("[api-gateway] ERROR: Sanctions-service response missing 'cleared' field")
+		return false
+	}
+	
+	log.Printf("[api-gateway] Sanctions screening result: cleared=%v", cleared)
+	return cleared
 }
 
 func calculateFee(amount float64, currency, rail string) float64 {
@@ -318,13 +343,50 @@ func calculateFee(amount float64, currency, rail string) float64 {
 }
 
 func processSWIFT(req TransferRequest) string {
-	// Call COBOL swift-gateway via subprocess
-	// For now, return mock ID
-	return fmt.Sprintf("SWIFT-%d", time.Now().Unix())
+	// Call swift-gateway HTTP service
+	log.Printf("[api-gateway] Calling swift-gateway: senderId=%s, recipientId=%s, amount=%.2f", 
+		req.SenderID, req.RecipientID, req.Amount)
+	
+	reqBody := map[string]interface{}{
+		"senderId":    req.SenderID,
+		"recipientId": req.RecipientID,
+		"amount":      req.Amount,
+		"currency":    req.Currency,
+	}
+	jsonData, _ := json.Marshal(reqBody)
+	resp, err := http.Post(fmt.Sprintf("%s/generate", swiftGatewayURL), "application/json",
+		bytes.NewBuffer(jsonData))
+	if err != nil {
+		log.Printf("[api-gateway] ERROR: Failed to call swift-gateway: %v", err)
+		return ""
+	}
+	defer resp.Body.Close()
+	
+	if resp.StatusCode != http.StatusOK {
+		log.Printf("[api-gateway] ERROR: Swift-gateway returned status %d", resp.StatusCode)
+		return ""
+	}
+	
+	var result map[string]string
+	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+		log.Printf("[api-gateway] ERROR: Failed to parse swift-gateway response: %v", err)
+		return ""
+	}
+	
+	transferID := result["id"]
+	if transferID == "" {
+		transferID = result["reference"]
+	}
+	
+	log.Printf("[api-gateway] SWIFT transfer processed successfully: id=%s", transferID)
+	return transferID
 }
 
 func processCrypto(req TransferRequest) string {
-	// Mock: call crypto-transfer service
+	// Call crypto-transfer service
+	log.Printf("[api-gateway] Calling crypto-transfer service: from=%s, to=%s, amount=%.2f", 
+		req.SenderID, req.RecipientID, req.Amount)
+	
 	reqBody := map[string]interface{}{
 		"from":   req.SenderID,
 		"to":     req.RecipientID,
@@ -334,18 +396,33 @@ func processCrypto(req TransferRequest) string {
 	resp, err := http.Post(fmt.Sprintf("%s/transfer", cryptoServiceURL), "application/json",
 		bytes.NewBuffer(jsonData))
 	if err != nil {
+		log.Printf("[api-gateway] ERROR: Failed to call crypto-transfer service: %v", err)
 		return ""
 	}
 	defer resp.Body.Close()
 	
+	if resp.StatusCode != http.StatusOK {
+		log.Printf("[api-gateway] ERROR: Crypto-transfer service returned status %d", resp.StatusCode)
+		return ""
+	}
+	
 	var result map[string]string
-	json.NewDecoder(resp.Body).Decode(&result)
-	return result["txHash"]
+	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+		log.Printf("[api-gateway] ERROR: Failed to parse crypto-transfer response: %v", err)
+		return ""
+	}
+	
+	txHash := result["txHash"]
+	log.Printf("[api-gateway] Crypto transfer processed: txHash=%s", txHash)
+	return txHash
 }
 
 func logAudit(transferID string, req TransferRequest, fee float64) {
 	// Async log to audit service
 	go func() {
+		log.Printf("[api-gateway] Logging to audit-service: transferId=%s, senderId=%s, recipientId=%s, amount=%.2f", 
+			transferID, req.SenderID, req.RecipientID, req.Amount)
+		
 		auditData := map[string]interface{}{
 			"transferId":  transferID,
 			"senderId":    req.SenderID,
@@ -356,8 +433,20 @@ func logAudit(transferID string, req TransferRequest, fee float64) {
 			"fee":         fee,
 		}
 		jsonData, _ := json.Marshal(auditData)
-		http.Post(fmt.Sprintf("%s/log", auditServiceURL), "application/json",
+		resp, err := http.Post(fmt.Sprintf("%s/log", auditServiceURL), "application/json",
 			bytes.NewBuffer(jsonData))
+		if err != nil {
+			log.Printf("[api-gateway] ERROR: Failed to log to audit-service: %v", err)
+			return
+		}
+		defer resp.Body.Close()
+		
+		if resp.StatusCode != http.StatusOK {
+			log.Printf("[api-gateway] ERROR: Audit-service returned status %d", resp.StatusCode)
+			return
+		}
+		
+		log.Printf("[api-gateway] Successfully logged to audit-service: transferId=%s", transferID)
 	}()
 }
 

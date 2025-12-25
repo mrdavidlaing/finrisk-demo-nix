@@ -53,14 +53,28 @@ When('I submit a SWIFT transfer of ${int} USD to {string}') do |amount, to|
 end
 
 Then('the transfer should be accepted') do
-  expect(@response.status).to eq(200), "Expected transfer to be accepted but got status #{@response.status}"
+  error_msg = if @response.status != 200
+    body_info = @response.respond_to?(:raw_body) ? @response.raw_body : (@response.body.to_s rescue 'N/A')
+    "Expected transfer to be accepted but got status #{@response.status}. Response body: #{body_info}"
+  else
+    "Expected transfer to be accepted but got status #{@response.status}"
+  end
+  expect(@response.status).to eq(200), error_msg
 end
 
 Then('the transfer should be rejected with {string}') do |expected_error|
   expect(@response.status).to be >= 400, "Expected transfer to be rejected but got status #{@response.status}"
-  if @response.body.is_a?(Hash) && @response.body['error']
-    expect(@response.body['error']).to include(expected_error)
+  # Check both JSON error field and raw body (API gateway returns plain text errors)
+  body_text = if @response.respond_to?(:raw_body)
+    @response.raw_body.to_s
+  elsif @response.body.is_a?(String)
+    @response.body
+  elsif @response.body.is_a?(Hash)
+    @response.body['error'] || @response.body.to_json
+  else
+    @response.body.to_s
   end
+  expect(body_text.to_s).to match(/#{Regexp.escape(expected_error)}/i), "Expected error message '#{expected_error}' but got: #{body_text}"
 end
 
 Then('the response should include a transfer ID') do
