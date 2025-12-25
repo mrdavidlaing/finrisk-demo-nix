@@ -16,15 +16,15 @@
         };
         
         # Import service packages
-        api-gateway = pkgs.callPackage ./nix/api-gateway.nix { };
-        kyc-service = pkgs.callPackage ./nix/kyc-service.nix { };
-        fee-service = pkgs.callPackage ./nix/fee-service.nix { };
-        sanctions-service = pkgs.callPackage ./nix/sanctions-service.nix { };
-        swift-gateway = pkgs.callPackage ./nix/swift-gateway.nix { };
-        crypto-transfer = pkgs.callPackage ./nix/crypto-transfer.nix { };
-        audit-service = pkgs.callPackage ./nix/audit-service.nix { };
-        web-portal = pkgs.callPackage ./nix/web-portal.nix { };
-        smoke-tests = pkgs.callPackage ./nix/smoke-tests.nix { };
+        api-gateway = pkgs.callPackage ./release/api-gateway.nix { };
+        kyc-service = pkgs.callPackage ./release/kyc-service.nix { };
+        fee-service = pkgs.callPackage ./release/fee-service.nix { };
+        sanctions-service = pkgs.callPackage ./release/sanctions-service.nix { };
+        swift-gateway = pkgs.callPackage ./release/swift-gateway.nix { };
+        crypto-transfer = pkgs.callPackage ./release/crypto-transfer.nix { };
+        audit-service = pkgs.callPackage ./release/audit-service.nix { };
+        web-portal = pkgs.callPackage ./release/web-portal.nix { };
+        smoke-tests = pkgs.callPackage ./release/smoke-tests.nix { };
         
         # Docker images
         api-gateway-image = pkgs.dockerTools.buildImage {

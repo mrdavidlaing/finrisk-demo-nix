@@ -252,7 +252,7 @@ build-web:
 
 # Format Nix files
 fmt:
-    nixpkgs-fmt flake.nix nix/*.nix
+    nixpkgs-fmt flake.nix release/*.nix
 
 # Check flake
 check:

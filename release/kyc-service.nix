@@ -8,7 +8,7 @@ pkgs.buildDotnetModule {
 
   projectFile = "KycService.csproj";
   
-  nugetDeps = ./deps/kyc-service-deps.nix;
+  nugetDeps = ./kyc-service-deps.nix;
 
   dotnet-sdk = pkgs.dotnetCorePackages.sdk_8_0;
   dotnet-runtime = pkgs.dotnetCorePackages.aspnetcore_8_0;

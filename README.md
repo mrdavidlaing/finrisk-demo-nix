@@ -157,7 +157,7 @@ transferx/
 │   ├── audit-service/       # Perl service
 │   ├── swift-gateway/       # COBOL service
 │   └── crypto-transfer/     # Rust service
-├── nix/                     # Per-service Nix expressions
+├── release/                 # Per-service release definitions
 ├── compliance/              # Generated SBOMs and vulnerability reports
 ├── .devcontainer/           # VSCode devcontainer config
 └── docker-compose.yml       # Local development orchestration
@@ -195,12 +195,15 @@ bundle lock --update
 # Regenerate gemset.nix with new hashes
 nix run nixpkgs#bundix -- -l
 
+# Move gemset.nix to release directory
+mv gemset.nix ../release/smoke-tests-gemset.nix
+
 # Verify the build works
 cd ../..
 nix build .#smoke-tests
 
 # Commit the changes
-git add services/smoke-tests/Gemfile.lock services/smoke-tests/gemset.nix
+git add services/smoke-tests/Gemfile.lock release/smoke-tests-gemset.nix
 git commit -m "chore: Update Ruby gem dependencies"
 ```
 
@@ -218,8 +221,12 @@ bundle lock
 # Regenerate gemset.nix
 nix run nixpkgs#bundix -- -l
 
-# Commit
-git add Gemfile Gemfile.lock gemset.nix
+# Move gemset.nix to release directory
+mv gemset.nix ../release/smoke-tests-gemset.nix
+
+# Commit (from project root)
+cd ../..
+git add services/smoke-tests/Gemfile services/smoke-tests/Gemfile.lock release/smoke-tests-gemset.nix
 ```
 
 #### Other Languages
@@ -234,7 +241,7 @@ git add Gemfile Gemfile.lock gemset.nix
 ### Adding a New Service
 
 1. Create service in `services/<service-name>/`
-2. Create Nix expression in `nix/<service-name>.nix`
+2. Create Nix expression in `release/<service-name>.nix`
 3. Add package to `flake.nix`
 4. Add Docker image derivation
 5. Update `docker-compose.yml`

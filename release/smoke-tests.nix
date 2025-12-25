@@ -18,18 +18,27 @@ let
   #   cd services/smoke-tests
   #   bundle lock --update           # Update Gemfile.lock
   #   nix run nixpkgs#bundix -- -l   # Regenerate gemset.nix
-  #   git add Gemfile.lock gemset.nix
+  #   mv gemset.nix ../release/smoke-tests-gemset.nix
+  #   git add Gemfile.lock release/smoke-tests-gemset.nix
   #
   # To add a new gem:
   #   1. Add to Gemfile
   #   2. Run: bundle lock
   #   3. Run: nix run nixpkgs#bundix -- -l
-  #   4. Commit: Gemfile, Gemfile.lock, gemset.nix
+  #   4. mv gemset.nix ../release/smoke-tests-gemset.nix
+  #   5. Commit: Gemfile, Gemfile.lock, release/smoke-tests-gemset.nix
   #
+  # Create a gemdir that includes the gemset.nix from release/
+  gemdir = pkgs.runCommand "smoke-tests-gemdir" {} ''
+    mkdir -p $out
+    cp -r ${../services/smoke-tests}/* $out/
+    cp ${./smoke-tests-gemset.nix} $out/gemset.nix
+  '';
+  
   gems = pkgs.bundlerEnv {
     name = "smoke-tests-gems";
     inherit ruby;
-    gemdir = ../services/smoke-tests;
+    gemdir = gemdir;
   };
 in
 pkgs.stdenv.mkDerivation {
