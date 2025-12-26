@@ -10,8 +10,7 @@
 #
 # The script will:
 #   1. Get version from git describe
-#   2. Upload all Syft SBOMs (compliance/sboms/*.cdx.json)
-#   3. Upload all Nix SBOMs (compliance/sboms/nix/*.cdx.json)
+#   2. Upload composed CycloneDX SBOMs (base/runtime/app/container) from compliance/sboms/
 #
 # Exit codes:
 #   0 - Success
@@ -92,32 +91,34 @@ UPLOADED=0
 FAILED=0
 SKIPPED=0
 
-# Upload Syft SBOMs (container/runtime dependencies)
-echo ""
-echo -e "${BLUE}Uploading Syft SBOMs (container dependencies)...${NC}"
+# SBOM directory
+SBOM_DIR="${SBOM_DIR:-compliance/sboms}"
+
+# Services and runtimes
 SERVICES="api-gateway kyc-service fee-service sanctions-service swift-gateway crypto-transfer audit-service web-portal smoke-tests"
+RUNTIMES="native node java dotnet python perl ruby"
 
-for service in $SERVICES; do
-    sbom_file="compliance/sboms/${service}.cdx.json"
-    if [ -f "$sbom_file" ]; then
-        if upload_sbom "$sbom_file" "$service" "$VERSION"; then
-            UPLOADED=$((UPLOADED + 1))
-        else
-            FAILED=$((FAILED + 1))
-        fi
-    else
-        echo -e "${YELLOW}  ⚠ Skipping ${service} (SBOM not found)${NC}"
-        SKIPPED=$((SKIPPED + 1))
-    fi
-done
-
-# Upload Nix SBOMs (build-time dependencies)
 echo ""
-echo -e "${BLUE}Uploading Nix SBOMs (build-time dependencies)...${NC}"
+echo -e "${BLUE}Uploading composed CycloneDX SBOMs...${NC}"
+echo -e "${BLUE}  SBOM_DIR=${SBOM_DIR}${NC}"
 
-for service in $SERVICES; do
-    sbom_file="compliance/sboms/nix/${service}.cdx.json"
-    project_name="${service}-nix"
+# 1) Base layer
+base_sbom="${SBOM_DIR}/base.cdx.json"
+if [ -f "$base_sbom" ]; then
+    if upload_sbom "$base_sbom" "transferx-base" "$VERSION"; then
+        UPLOADED=$((UPLOADED + 1))
+    else
+        FAILED=$((FAILED + 1))
+    fi
+else
+    echo -e "${YELLOW}  ⚠ Skipping transferx-base (SBOM not found: ${base_sbom})${NC}"
+    SKIPPED=$((SKIPPED + 1))
+fi
+
+# 2) Runtime layers
+for rt in $RUNTIMES; do
+    sbom_file="${SBOM_DIR}/runtime-${rt}.cdx.json"
+    project_name="transferx-runtime-${rt}"
     if [ -f "$sbom_file" ]; then
         if upload_sbom "$sbom_file" "$project_name" "$VERSION"; then
             UPLOADED=$((UPLOADED + 1))
@@ -126,6 +127,37 @@ for service in $SERVICES; do
         fi
     else
         echo -e "${YELLOW}  ⚠ Skipping ${project_name} (SBOM not found)${NC}"
+        SKIPPED=$((SKIPPED + 1))
+    fi
+done
+
+# 3) App and container SBOMs per service
+for service in $SERVICES; do
+    # Application closure SBOM
+    app_sbom="${SBOM_DIR}/app-${service}.cdx.json"
+    app_project_name="${service}-app"
+    if [ -f "$app_sbom" ]; then
+        if upload_sbom "$app_sbom" "$app_project_name" "$VERSION"; then
+            UPLOADED=$((UPLOADED + 1))
+        else
+            FAILED=$((FAILED + 1))
+        fi
+    else
+        echo -e "${YELLOW}  ⚠ Skipping ${app_project_name} (SBOM not found)${NC}"
+        SKIPPED=$((SKIPPED + 1))
+    fi
+
+    # Composed container SBOM (canonical)
+    container_sbom="${SBOM_DIR}/container-${service}.cdx.json"
+    container_project_name="${service}"
+    if [ -f "$container_sbom" ]; then
+        if upload_sbom "$container_sbom" "$container_project_name" "$VERSION"; then
+            UPLOADED=$((UPLOADED + 1))
+        else
+            FAILED=$((FAILED + 1))
+        fi
+    else
+        echo -e "${YELLOW}  ⚠ Skipping ${container_project_name} (SBOM not found)${NC}"
         SKIPPED=$((SKIPPED + 1))
     fi
 done

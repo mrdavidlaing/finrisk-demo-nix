@@ -25,6 +25,24 @@
         audit-service = pkgs.callPackage ./release/audit-service.nix { };
         web-portal = pkgs.callPackage ./release/web-portal.nix { };
         smoke-tests = pkgs.callPackage ./release/smoke-tests.nix { };
+
+        services = {
+          inherit
+            api-gateway
+            kyc-service
+            fee-service
+            sanctions-service
+            swift-gateway
+            crypto-transfer
+            audit-service
+            web-portal
+            smoke-tests;
+        };
+
+        packageSets = import ./release/package-sets.nix {
+          inherit pkgs services;
+        };
+
         
         # Docker images
         api-gateway-image = pkgs.dockerTools.buildImage {
@@ -185,24 +203,103 @@
           ln -s ${web-portal-image} $out/web-portal.tar.gz
           ln -s ${smoke-tests-image} $out/smoke-tests.tar.gz
         '';
-        
-        # SBOM generation (mock - in production use cyclonedx-cli)
+
+
+        # Legacy placeholder for SBOM directory (use generate-composed-sboms)
         all-sboms = pkgs.writeTextDir "sboms/README.md" ''
-          # SBOMs Directory
-          
-          SBOMs for each service are generated here using syft and sbomnix.
-          
-          Services:
-          - api-gateway
-          - kyc-service
-          - fee-service
-          - sanctions-service
-          - swift-gateway
-          - crypto-transfer
-          - audit-service
-          - web-portal
-          - smoke-tests
+          # SBOMs
+
+          Generate SBOMs locally:
+          - nix run .#generate-sboms -- sboms
+          - nix run .#generate-composed-sboms -- sboms
         '';
+        
+        generate-sboms = pkgs.writeShellScriptBin "generate-sboms" ''
+          set -euo pipefail
+
+          OUT_DIR="''${1:-sboms}"
+          mkdir -p "$OUT_DIR"
+          OUT_DIR="$(cd "$OUT_DIR" && pwd)"
+
+          SERVICES="api-gateway kyc-service fee-service sanctions-service swift-gateway crypto-transfer audit-service web-portal smoke-tests"
+          REPO_ROOT="$(git rev-parse --show-toplevel 2>/dev/null || pwd)"
+
+          tmp="$(mktemp -d)"
+          cleanup() {
+            chmod -R u+w "$tmp" 2>/dev/null || true
+            rm -rf "$tmp"
+          }
+          trap cleanup EXIT
+
+          cd "$tmp"
+
+          gen_sbomnix() {
+            local name="$1"
+            local store_path="$2"
+            local out_file="$3"
+            echo "[sbom] $name -> $out_file"
+            ${pkgs.sbomnix}/bin/sbomnix "$store_path" --cdx "$out_file"
+            rm -f sbom.spdx.json sbom.csv || true
+          }
+
+          base_path="$(nix build --no-link --print-out-paths "$REPO_ROOT"#transferx-base-set)"
+          gen_sbomnix "base" "$base_path" "$OUT_DIR/base.cdx.json"
+
+          for rt in native node java dotnet python perl ruby; do
+            rt_path="$(nix build --no-link --print-out-paths "$REPO_ROOT"#transferx-runtime-$rt)"
+            gen_sbomnix "runtime-$rt" "$rt_path" "$OUT_DIR/runtime-$rt.cdx.json"
+          done
+
+          for svc in $SERVICES; do
+            svc_path="$(nix build --no-link --print-out-paths "$REPO_ROOT"#$svc)"
+            gen_sbomnix "app-$svc" "$svc_path" "$OUT_DIR/app-$svc.cdx.json"
+          done
+
+          echo "[sbom] wrote layer SBOMs to $OUT_DIR"
+        '';
+
+        generate-composed-sboms = pkgs.writeShellScriptBin "generate-composed-sboms" ''
+          set -euo pipefail
+
+          OUT_DIR="''${1:-sboms}"
+          mkdir -p "$OUT_DIR"
+          OUT_DIR="$(cd "$OUT_DIR" && pwd)"
+
+          SERVICES="api-gateway kyc-service fee-service sanctions-service swift-gateway crypto-transfer audit-service web-portal smoke-tests"
+
+          "${generate-sboms}/bin/generate-sboms" "$OUT_DIR"
+
+          runtime_for() {
+            case "$1" in
+              api-gateway|crypto-transfer|swift-gateway) echo "native" ;;
+              kyc-service) echo "dotnet" ;;
+              sanctions-service) echo "java" ;;
+              web-portal) echo "node" ;;
+              fee-service) echo "python" ;;
+              audit-service) echo "perl" ;;
+              smoke-tests) echo "ruby" ;;
+              *) echo "native" ;;
+            esac
+          }
+
+          export PATH="${pkgs.coreutils}/bin:${pkgs.gawk}/bin:${pkgs.jq}/bin:$PATH"
+          export JQ="${pkgs.jq}/bin/jq"
+
+          for svc in $SERVICES; do
+            rt="$(runtime_for "$svc")"
+            base="$OUT_DIR/base.cdx.json"
+            runtime="$OUT_DIR/runtime-$rt.cdx.json"
+            app="$OUT_DIR/app-$svc.cdx.json"
+            out="$OUT_DIR/container-$svc.cdx.json"
+
+            echo "[sbom] compose container-$svc (base + runtime-$rt + app-$svc)"
+            ${pkgs.bash}/bin/bash ${./scripts/compose-cyclonedx.sh}               "$base" "$runtime" "$app" "$out"               "$svc" "transferx/$svc" "latest"
+          done
+
+          echo "[sbom] wrote container SBOMs to $OUT_DIR"
+        '';
+
+
         
         # Vulnerability scanning script
         scan-all = pkgs.writeShellScriptBin "scan-all" ''
@@ -334,6 +431,19 @@
           
           # Aggregated
           inherit all-services all-images all-sboms;
+
+          # Package sets (base + runtimes)
+          transferx-base-set = packageSets.base;
+          transferx-runtime-native = packageSets.runtimes.native;
+          transferx-runtime-node = packageSets.runtimes.node;
+          transferx-runtime-java = packageSets.runtimes.java;
+          transferx-runtime-dotnet = packageSets.runtimes.dotnet;
+          transferx-runtime-python = packageSets.runtimes.python;
+          transferx-runtime-perl = packageSets.runtimes.perl;
+          transferx-runtime-ruby = packageSets.runtimes.ruby;
+
+          # SBOM generation apps as packages
+          inherit generate-sboms generate-composed-sboms;
           
           # Docker images
           inherit api-gateway-image kyc-service-image fee-service-image
@@ -345,6 +455,16 @@
           scan-all = {
             type = "app";
             program = "${scan-all}/bin/scan-all";
+          };
+
+          generate-sboms = {
+            type = "app";
+            program = "${generate-sboms}/bin/generate-sboms";
+          };
+
+          generate-composed-sboms = {
+            type = "app";
+            program = "${generate-composed-sboms}/bin/generate-composed-sboms";
           };
           
           # Show what was built (even if cached)

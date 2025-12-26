@@ -108,19 +108,11 @@ clean-all: clean clean-docker
 # ============================================================================
 
 # Run full compliance scan (SBOMs + vulnerability scanning)
-scan: load-images
-    nix run .#scan-all
+scan: sboms vulns
 
-# Generate SBOMs only (requires images loaded)
+# Generate comprehensive CycloneDX SBOMs (base/runtime/app/container)
 sboms:
-    #!/usr/bin/env bash
-    set -euo pipefail
-    mkdir -p compliance/sboms
-    SERVICES="api-gateway kyc-service fee-service sanctions-service swift-gateway crypto-transfer audit-service web-portal smoke-tests"
-    for service in $SERVICES; do
-        echo "Generating SBOM for $service..."
-        syft "transferx/$service:latest" -o cyclonedx-json --file "compliance/sboms/$service.cdx.json"
-    done
+    nix run .#generate-composed-sboms -- compliance/sboms
 
 # Scan for vulnerabilities (requires SBOMs)
 vulns:
@@ -130,7 +122,7 @@ vulns:
     SERVICES="api-gateway kyc-service fee-service sanctions-service swift-gateway crypto-transfer audit-service web-portal smoke-tests"
     for service in $SERVICES; do
         echo "Scanning $service for vulnerabilities..."
-        grype "compliance/sboms/$service.cdx.json" -o json --file "compliance/vulns/$service.json"
+        grype "compliance/sboms/container-$service.cdx.json" -o json --file "compliance/vulns/$service.json"
     done
 
 # Show vulnerability summary
@@ -164,14 +156,14 @@ upload-sboms:
     # Check if SBOMs exist
     if [ ! -d "compliance/sboms" ]; then
         echo "Error: compliance/sboms directory not found"
-        echo "Run 'just scan' or 'nix run .#scan-all' to generate SBOMs first"
+        echo "Run 'just sboms' (or 'just scan') to generate SBOMs first"
         exit 1
     fi
     
     # Check if any SBOMs exist
     if [ -z "$(find compliance/sboms -name "*.cdx.json" 2>/dev/null | head -1)" ]; then
         echo "Error: No SBOM files found in compliance/sboms"
-        echo "Run 'just scan' or 'nix run .#scan-all' to generate SBOMs first"
+        echo "Run 'just sboms' (or 'just scan') to generate SBOMs first"
         exit 1
     fi
     
