@@ -13,9 +13,152 @@ env:
   IMAGE_PREFIX: ${{ github.repository_owner }}/transferx
 
 jobs:
+  update-nix-hashes:
+    name: Update Nix Hashes
+    runs-on: ubuntu-latest
+    if: github.event_name == 'pull_request'
+    permissions:
+      contents: write
+      pull-requests: write
+    env:
+      FLAKEHUB_PUBLISH: "0"
+    
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          fetch-depth: 0  # Need full history for git diff
+
+      - name: Install Nix
+        uses: DeterminateSystems/nix-installer-action@v14
+
+      - name: Setup Nix cache
+        uses: DeterminateSystems/magic-nix-cache-action@v8
+
+      - name: Configure Git
+        run: |
+          git config --local user.email "github-actions[bot]@users.noreply.github.com"
+          git config --local user.name "github-actions[bot]"
+
+      - name: Update Nix hashes
+        id: update-hashes
+        continue-on-error: true
+        run: |
+          chmod +x scripts/update-nix-hashes.sh
+          scripts/update-nix-hashes.sh || true
+
+      - name: Check for changes and prepare PR comment data
+        id: check-changes
+        run: |
+          if [ -n "$(git status --porcelain)" ]; then
+            echo "has_changes=true" >> $GITHUB_OUTPUT
+            git diff --stat
+            
+            # Capture updated files
+            UPDATED_FILES=$(git diff --name-only release/ | grep -E '\.(nix|gemset\.nix)$' || true)
+            echo "updated_files<<EOF" >> $GITHUB_OUTPUT
+            echo "$UPDATED_FILES" >> $GITHUB_OUTPUT
+            echo "EOF" >> $GITHUB_OUTPUT
+            
+            # Extract service names from file paths
+            SERVICES=$(echo "$UPDATED_FILES" | sed -E 's|release/([^-]+).*|\1|' | sort -u | tr '\n' ',' | sed 's/,$//')
+            echo "updated_services<<EOF" >> $GITHUB_OUTPUT
+            echo "$SERVICES" >> $GITHUB_OUTPUT
+            echo "EOF" >> $GITHUB_OUTPUT
+            
+            # Capture a summary of the diff (just the changed lines, not full diff)
+            DIFF_SUMMARY=$(git diff release/ | grep -E '^[+-].*sha256|^[+-].*hash|^[+-].*vendorHash|^[+-].*npmDepsHash|^[+-].*outputHash' | head -20 || echo "Hash changes detected")
+            echo "diff_summary<<EOF" >> $GITHUB_OUTPUT
+            echo "$DIFF_SUMMARY" >> $GITHUB_OUTPUT
+            echo "EOF" >> $GITHUB_OUTPUT
+          else
+            echo "has_changes=false" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Commit and push hash updates
+        if: steps.check-changes.outputs.has_changes == 'true'
+        run: |
+          git add release/*.nix release/*-deps.nix release/*-gemset.nix || true
+          git commit -m "chore: update Nix hashes for dependency changes
+
+          Auto-updated by CI to fix hash mismatches after dependency updates." || exit 0
+          git push origin HEAD:${{ github.head_ref }} || git push
+
+      - name: Comment on PR with details
+        if: steps.check-changes.outputs.has_changes == 'true'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const updatedFiles = `${{ steps.check-changes.outputs.updated_files }}`.trim().split('\n').filter(f => f);
+            const updatedServices = `${{ steps.check-changes.outputs.updated_services }}`.trim();
+            const diffSummary = `${{ steps.check-changes.outputs.diff_summary }}`.trim();
+            
+            // Create a detailed comment
+            let servicesList = '';
+            if (updatedServices) {
+              const services = updatedServices.split(',').filter(s => s);
+              servicesList = services.map(s => '- `' + s + '`').join('\n');
+            } else if (updatedFiles.length > 0) {
+              const services = updatedFiles.map(f => {
+                const match = f.match(/release\/([^-]+)/);
+                return match ? match[1] : null;
+              }).filter(s => s);
+              servicesList = [...new Set(services)].map(s => '- `' + s + '`').join('\n');
+            }
+            
+            const filesList = updatedFiles.length > 0 
+              ? updatedFiles.map(f => '- `' + f + '`').join('\n')
+              : 'Unable to determine which files were updated.';
+            
+            let comment = '## ⚠️ Nix Hashes Updated Automatically\n\n';
+            comment += 'I\'ve automatically updated Nix dependency hashes to match the updated dependencies in this PR.\n\n';
+            comment += '### 📋 Updated Services\n\n';
+            comment += (servicesList || 'Unable to determine which services were updated. Please check the commit changes.') + '\n\n';
+            comment += '### ⚠️ **IMPORTANT: Please Verify These Changes**\n\n';
+            comment += '**Before merging, please verify that these hash updates are expected and correct:**\n\n';
+            comment += '1. **Review the dependency changes**: Check that the dependency updates in this PR are legitimate and expected.\n';
+            comment += '2. **Verify the hash changes**: Review the commit diff to ensure only hash values changed, not the structure of the Nix files.\n';
+            comment += '3. **Check the build**: The CI build should now pass. If it doesn\'t, there may be an issue with the hash update process.\n\n';
+            comment += '### 🔍 How to Verify the Changes\n\n';
+            comment += '```bash\n';
+            comment += '# 1. Review the diff to see what changed\n';
+            comment += 'git diff HEAD~1 release/\n\n';
+            comment += '# 2. Verify the service builds locally (if you have Nix installed)\n';
+            comment += 'nix build .#<service-name>\n\n';
+            comment += '# 3. Check that only hash values changed, not file structure\n';
+            comment += 'git diff HEAD~1 release/ | grep -E \'^[+-].*sha256|^[+-].*hash\'\n';
+            comment += '```\n\n';
+            comment += '### 📝 What Changed\n\n';
+            comment += 'The following files were updated:\n';
+            comment += filesList + '\n\n';
+            
+            if (diffSummary) {
+              comment += '### 🔍 Hash Change Summary\n\n';
+              comment += '```\n';
+              comment += diffSummary + '\n';
+              comment += '```\n\n';
+            }
+            
+            comment += '### 🔄 Next Steps\n\n';
+            comment += '- The build will automatically re-run with the updated hashes\n';
+            comment += '- If the build passes, you can merge this PR\n';
+            comment += '- If you see any unexpected changes, please review and revert if necessary\n\n';
+            comment += '---\n\n';
+            comment += '*This comment was automatically generated by the CI workflow.*';
+
+            github.rest.issues.createComment({
+              issue_number: context.issue.number,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              body: comment
+            });
+
   build:
     name: Build Services
     runs-on: ubuntu-latest
+    needs: [update-nix-hashes]
+    if: always() && (needs.update-nix-hashes.result == 'success' || needs.update-nix-hashes.result == 'skipped')
     permissions:
       contents: read
     env:
@@ -25,6 +168,8 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0  # May need full history if hashes were updated
 
       - name: Install Nix
         uses: DeterminateSystems/nix-installer-action@v14

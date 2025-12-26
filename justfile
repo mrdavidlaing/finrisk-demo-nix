@@ -116,7 +116,7 @@ sboms:
     #!/usr/bin/env bash
     set -euo pipefail
     mkdir -p compliance/sboms
-    SERVICES="api-gateway kyc-service fee-service sanctions-service swift-gateway crypto-transfer audit-service web-portal"
+    SERVICES="api-gateway kyc-service fee-service sanctions-service swift-gateway crypto-transfer audit-service web-portal smoke-tests"
     for service in $SERVICES; do
         echo "Generating SBOM for $service..."
         syft "transferx/$service:latest" -o cyclonedx-json --file "compliance/sboms/$service.cdx.json"
@@ -127,7 +127,7 @@ vulns:
     #!/usr/bin/env bash
     set -euo pipefail
     mkdir -p compliance/vulns
-    SERVICES="api-gateway kyc-service fee-service sanctions-service swift-gateway crypto-transfer audit-service web-portal"
+    SERVICES="api-gateway kyc-service fee-service sanctions-service swift-gateway crypto-transfer audit-service web-portal smoke-tests"
     for service in $SERVICES; do
         echo "Scanning $service for vulnerabilities..."
         grype "compliance/sboms/$service.cdx.json" -o json --file "compliance/vulns/$service.json"
@@ -148,6 +148,35 @@ vuln-summary:
             printf "%-20s Critical: %3s  High: %3s  Medium: %3s\n" "$service" "$critical" "$high" "$medium"
         fi
     done
+
+# Upload SBOMs to Dependency Track
+upload-sboms:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    
+    # Check for API key
+    if [ -z "${DEPENDENCY_TRACK_API_KEY:-}" ]; then
+        echo "Error: DEPENDENCY_TRACK_API_KEY environment variable is required"
+        echo "Get your API key from Dependency Track UI: Administration > Access Management > API Keys"
+        exit 1
+    fi
+    
+    # Check if SBOMs exist
+    if [ ! -d "compliance/sboms" ]; then
+        echo "Error: compliance/sboms directory not found"
+        echo "Run 'just scan' or 'nix run .#scan-all' to generate SBOMs first"
+        exit 1
+    fi
+    
+    # Check if any SBOMs exist
+    if [ -z "$(find compliance/sboms -name "*.cdx.json" 2>/dev/null | head -1)" ]; then
+        echo "Error: No SBOM files found in compliance/sboms"
+        echo "Run 'just scan' or 'nix run .#scan-all' to generate SBOMs first"
+        exit 1
+    fi
+    
+    # Run upload script
+    ./scripts/upload-sboms-to-dtrack.sh
 
 # ============================================================================
 # Testing Targets
