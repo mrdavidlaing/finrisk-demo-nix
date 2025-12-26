@@ -42,6 +42,7 @@ target/
 
 # Compliance outputs
 compliance/sboms/*.json
+compliance/sboms/nix/
 compliance/vulns/*.json
 vulns-*.json
 

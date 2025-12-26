@@ -204,6 +204,12 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
+      - name: Install Nix
+        uses: DeterminateSystems/nix-installer-action@v14
+
+      - name: Setup Nix cache
+        uses: DeterminateSystems/magic-nix-cache-action@v8
+
       - name: Download Docker images
         uses: actions/download-artifact@v4
         with:
@@ -233,11 +239,14 @@ jobs:
       - name: Generate SBOMs
         run: |
           mkdir -p sboms
-          # Use the space-separated list from the previous step
           SERVICES='${{ steps.set-services.outputs.services_list }}'
+
+          # Canonical CycloneDX SBOMs (base/runtime/app/container via compositions)
+          nix run .#generate-composed-sboms -- sboms
+
+          # SPDX SBOMs for GitHub Dependency Graph submission + attestations
           for service in $SERVICES; do
-            echo "Generating SBOM for $service..."
-            syft "transferx/$service:latest" -o cyclonedx-json --file "sboms/$service.cdx.json"
+            echo "Generating SPDX SBOM for $service..."
             syft "transferx/$service:latest" -o spdx-json --file "sboms/$service.spdx.json"
           done
 
@@ -302,7 +311,7 @@ jobs:
         uses: anchore/scan-action@v5
         id: scan
         with:
-          sbom: "sboms/${{ matrix.service }}.cdx.json"
+          sbom: "sboms/container-${{ matrix.service }}.cdx.json"
           fail-build: false
           output-format: sarif
 
