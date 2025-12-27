@@ -242,6 +242,158 @@
             rm -f sbom.spdx.json sbom.csv || true
           }
 
+          gen_npm_sbom() {
+            local name="$1"
+            local src_dir="$2"
+            local out_file="$3"
+            echo "[sbom] npm $name -> $out_file"
+            if [ -f "$src_dir/package.json" ]; then
+              ${pkgs.syft}/bin/syft scan dir:"$src_dir" -o cyclonedx-json --output "cyclonedx-json=$out_file" || {
+                echo "[sbom] warning: failed to generate npm SBOM for $name, continuing without it" >&2
+                # Create empty SBOM if syft fails
+                echo '{"bomFormat":"CycloneDX","specVersion":"1.4","version":1,"components":[],"dependencies":[]}' > "$out_file"
+              }
+            else
+              echo "[sbom] warning: no package.json found for $name, skipping npm SBOM" >&2
+              echo '{"bomFormat":"CycloneDX","specVersion":"1.4","version":1,"components":[],"dependencies":[]}' > "$out_file"
+            fi
+          }
+
+          gen_maven_sbom() {
+            local name="$1"
+            local jar_path="$2"
+            local out_file="$3"
+            echo "[sbom] maven $name -> $out_file"
+            if [ -f "$jar_path" ]; then
+              # Syft can scan JAR files and extract Maven dependencies
+              ${pkgs.syft}/bin/syft scan file:"$jar_path" -o cyclonedx-json --output "cyclonedx-json=$out_file" || {
+                echo "[sbom] warning: failed to generate Maven SBOM for $name, continuing without it" >&2
+                # Create empty SBOM if syft fails
+                echo '{"bomFormat":"CycloneDX","specVersion":"1.4","version":1,"components":[],"dependencies":[]}' > "$out_file"
+              }
+            else
+              echo "[sbom] warning: no JAR file found at $jar_path for $name, skipping Maven SBOM" >&2
+              echo '{"bomFormat":"CycloneDX","specVersion":"1.4","version":1,"components":[],"dependencies":[]}' > "$out_file"
+            fi
+          }
+
+          gen_dotnet_sbom() {
+            local name="$1"
+            local service_path="$2"
+            local out_file="$3"
+            echo "[sbom] dotnet $name -> $out_file"
+            # Syft can scan .NET assemblies and extract NuGet dependencies
+            # Try scanning the lib directory (where DLLs are typically stored)
+            # or the entire service path
+            if [ -d "$service_path/lib" ] || [ -d "$service_path" ]; then
+              scan_path="$service_path"
+              if [ -d "$service_path/lib" ]; then
+                scan_path="$service_path/lib"
+              fi
+              ${pkgs.syft}/bin/syft scan dir:"$scan_path" -o cyclonedx-json --output "cyclonedx-json=$out_file" || {
+                echo "[sbom] warning: failed to generate .NET SBOM for $name, continuing without it" >&2
+                # Create empty SBOM if syft fails
+                echo '{"bomFormat":"CycloneDX","specVersion":"1.4","version":1,"components":[],"dependencies":[]}' > "$out_file"
+              }
+            else
+              echo "[sbom] warning: no directory found at $service_path for $name, skipping .NET SBOM" >&2
+              echo '{"bomFormat":"CycloneDX","specVersion":"1.4","version":1,"components":[],"dependencies":[]}' > "$out_file"
+            fi
+          }
+
+          gen_rust_sbom() {
+            local name="$1"
+            local src_dir="$2"
+            local out_file="$3"
+            echo "[sbom] rust $name -> $out_file"
+            if [ -f "$src_dir/Cargo.toml" ] || [ -f "$src_dir/Cargo.lock" ]; then
+              # Syft can scan Rust Cargo.toml/Cargo.lock files
+              ${pkgs.syft}/bin/syft scan dir:"$src_dir" -o cyclonedx-json --output "cyclonedx-json=$out_file" || {
+                echo "[sbom] warning: failed to generate Rust SBOM for $name, continuing without it" >&2
+                echo '{"bomFormat":"CycloneDX","specVersion":"1.4","version":1,"components":[],"dependencies":[]}' > "$out_file"
+              }
+            else
+              echo "[sbom] warning: no Cargo.toml/Cargo.lock found for $name, skipping Rust SBOM" >&2
+              echo '{"bomFormat":"CycloneDX","specVersion":"1.4","version":1,"components":[],"dependencies":[]}' > "$out_file"
+            fi
+          }
+
+          gen_go_sbom() {
+            local name="$1"
+            local src_dir="$2"
+            local out_file="$3"
+            echo "[sbom] go $name -> $out_file"
+            if [ -f "$src_dir/go.mod" ]; then
+              # Syft can scan Go go.mod/go.sum files
+              ${pkgs.syft}/bin/syft scan dir:"$src_dir" -o cyclonedx-json --output "cyclonedx-json=$out_file" || {
+                echo "[sbom] warning: failed to generate Go SBOM for $name, continuing without it" >&2
+                echo '{"bomFormat":"CycloneDX","specVersion":"1.4","version":1,"components":[],"dependencies":[]}' > "$out_file"
+              }
+            else
+              echo "[sbom] warning: no go.mod found for $name, skipping Go SBOM" >&2
+              echo '{"bomFormat":"CycloneDX","specVersion":"1.4","version":1,"components":[],"dependencies":[]}' > "$out_file"
+            fi
+          }
+
+          gen_perl_sbom() {
+            local name="$1"
+            local src_dir="$2"
+            local out_file="$3"
+            echo "[sbom] perl $name -> $out_file"
+            if [ -f "$src_dir/Makefile.PL" ] || [ -f "$src_dir/cpanfile" ] || [ -f "$src_dir/META.json" ]; then
+              # Syft can scan Perl Makefile.PL, cpanfile, or META.json files
+              ${pkgs.syft}/bin/syft scan dir:"$src_dir" -o cyclonedx-json --output "cyclonedx-json=$out_file" || {
+                echo "[sbom] warning: failed to generate Perl SBOM for $name, continuing without it" >&2
+                echo '{"bomFormat":"CycloneDX","specVersion":"1.4","version":1,"components":[],"dependencies":[]}' > "$out_file"
+              }
+            else
+              echo "[sbom] warning: no Makefile.PL/cpanfile/META.json found for $name, skipping Perl SBOM" >&2
+              echo '{"bomFormat":"CycloneDX","specVersion":"1.4","version":1,"components":[],"dependencies":[]}' > "$out_file"
+            fi
+          }
+
+          gen_python_sbom() {
+            local name="$1"
+            local src_dir="$2"
+            local out_file="$3"
+            echo "[sbom] python $name -> $out_file"
+            if [ -f "$src_dir/pyproject.toml" ] || [ -f "$src_dir/requirements.txt" ] || [ -f "$src_dir/Pipfile" ] || [ -f "$src_dir/poetry.lock" ]; then
+              # Syft can scan Python pyproject.toml, requirements.txt, Pipfile, or poetry.lock files
+              ${pkgs.syft}/bin/syft scan dir:"$src_dir" -o cyclonedx-json --output "cyclonedx-json=$out_file" || {
+                echo "[sbom] warning: failed to generate Python SBOM for $name, continuing without it" >&2
+                echo '{"bomFormat":"CycloneDX","specVersion":"1.4","version":1,"components":[],"dependencies":[]}' > "$out_file"
+              }
+            else
+              echo "[sbom] warning: no pyproject.toml/requirements.txt/Pipfile/poetry.lock found for $name, skipping Python SBOM" >&2
+              echo '{"bomFormat":"CycloneDX","specVersion":"1.4","version":1,"components":[],"dependencies":[]}' > "$out_file"
+            fi
+          }
+
+          gen_ruby_sbom() {
+            local name="$1"
+            local src_dir="$2"
+            local out_file="$3"
+            echo "[sbom] ruby $name -> $out_file"
+            if [ -f "$src_dir/Gemfile" ] || [ -f "$src_dir/Gemfile.lock" ] || [ -f "$src_dir/gems.rb" ]; then
+              # Syft can scan Ruby Gemfile, Gemfile.lock, or gems.rb files
+              ${pkgs.syft}/bin/syft scan dir:"$src_dir" -o cyclonedx-json --output "cyclonedx-json=$out_file" || {
+                echo "[sbom] warning: failed to generate Ruby SBOM for $name, continuing without it" >&2
+                echo '{"bomFormat":"CycloneDX","specVersion":"1.4","version":1,"components":[],"dependencies":[]}' > "$out_file"
+              }
+            else
+              echo "[sbom] warning: no Gemfile/Gemfile.lock/gems.rb found for $name, skipping Ruby SBOM" >&2
+              echo '{"bomFormat":"CycloneDX","specVersion":"1.4","version":1,"components":[],"dependencies":[]}' > "$out_file"
+            fi
+          }
+
+          merge_sboms() {
+            local nix_sbom="$1"
+            local deps_sbom="$2"
+            local out_file="$3"
+            echo "[sbom] merging Nix + dependencies SBOMs -> $out_file"
+            ${pkgs.bash}/bin/bash ${./scripts/merge-cyclonedx.sh} "$nix_sbom" "$deps_sbom" "$out_file"
+          }
+
           base_path="$(nix build --no-link --print-out-paths "$REPO_ROOT"#transferx-base-set)"
           gen_sbomnix "base" "$base_path" "$OUT_DIR/base.cdx.json"
 
@@ -252,7 +404,88 @@
 
           for svc in $SERVICES; do
             svc_path="$(nix build --no-link --print-out-paths "$REPO_ROOT"#$svc)"
-            gen_sbomnix "app-$svc" "$svc_path" "$OUT_DIR/app-$svc.cdx.json"
+            nix_sbom="$OUT_DIR/app-$svc-nix.cdx.json"
+            gen_sbomnix "app-$svc (nix)" "$svc_path" "$nix_sbom"
+            
+            # For Node.js services, also generate npm SBOM and merge
+            if [ "$svc" = "web-portal" ]; then
+              npm_sbom="$OUT_DIR/app-$svc-npm.cdx.json"
+              src_dir="$REPO_ROOT/services/$svc"
+              gen_npm_sbom "app-$svc (npm)" "$src_dir" "$npm_sbom"
+              merge_sboms "$nix_sbom" "$npm_sbom" "$OUT_DIR/app-$svc.cdx.json"
+              rm -f "$nix_sbom" "$npm_sbom"
+            # For Java/Maven services, extract Maven dependencies from JAR and merge
+            elif [ "$svc" = "sanctions-service" ]; then
+              # Find the JAR file in the Nix store path
+              jar_file="$(find "$svc_path/share/java" -name "*.jar" 2>/dev/null | head -1)"
+              if [ -n "$jar_file" ] && [ -f "$jar_file" ]; then
+                maven_sbom="$OUT_DIR/app-$svc-maven.cdx.json"
+                gen_maven_sbom "app-$svc (maven)" "$jar_file" "$maven_sbom"
+                merge_sboms "$nix_sbom" "$maven_sbom" "$OUT_DIR/app-$svc.cdx.json"
+                rm -f "$nix_sbom" "$maven_sbom"
+              else
+                echo "[sbom] warning: no JAR file found for $svc, using Nix SBOM only" >&2
+                mv "$nix_sbom" "$OUT_DIR/app-$svc.cdx.json"
+              fi
+            # For .NET services, extract NuGet dependencies from source (better component detection)
+            elif [ "$svc" = "kyc-service" ]; then
+              dotnet_sbom="$OUT_DIR/app-$svc-dotnet.cdx.json"
+              # Scan source directory for better component name matching (KycService.csproj -> KycService)
+              src_dir="$REPO_ROOT/services/$svc"
+              if [ -f "$src_dir/KycService.csproj" ] || [ -d "$svc_path/lib" ]; then
+                # Try source first (better for component matching), fall back to built output
+                if [ -f "$src_dir/KycService.csproj" ]; then
+                  ${pkgs.syft}/bin/syft scan dir:"$src_dir" -o cyclonedx-json --output "cyclonedx-json=$dotnet_sbom" || {
+                    echo "[sbom] warning: failed to generate .NET SBOM from source for $svc, trying built output..." >&2
+                    gen_dotnet_sbom "app-$svc (dotnet)" "$svc_path" "$dotnet_sbom"
+                  }
+                else
+                  gen_dotnet_sbom "app-$svc (dotnet)" "$svc_path" "$dotnet_sbom"
+                fi
+              else
+                echo "[sbom] warning: no .csproj or lib directory found for $svc, skipping .NET SBOM" >&2
+                echo '{"bomFormat":"CycloneDX","specVersion":"1.4","version":1,"components":[],"dependencies":[]}' > "$dotnet_sbom"
+              fi
+              merge_sboms "$nix_sbom" "$dotnet_sbom" "$OUT_DIR/app-$svc.cdx.json"
+              rm -f "$nix_sbom" "$dotnet_sbom"
+            # For Rust services, extract Cargo dependencies from source and merge
+            elif [ "$svc" = "crypto-transfer" ]; then
+              rust_sbom="$OUT_DIR/app-$svc-rust.cdx.json"
+              src_dir="$REPO_ROOT/services/$svc"
+              gen_rust_sbom "app-$svc (rust)" "$src_dir" "$rust_sbom"
+              merge_sboms "$nix_sbom" "$rust_sbom" "$OUT_DIR/app-$svc.cdx.json"
+              rm -f "$nix_sbom" "$rust_sbom"
+            # For Go services, extract Go module dependencies from source and merge
+            elif [ "$svc" = "api-gateway" ]; then
+              go_sbom="$OUT_DIR/app-$svc-go.cdx.json"
+              src_dir="$REPO_ROOT/services/$svc"
+              gen_go_sbom "app-$svc (go)" "$src_dir" "$go_sbom"
+              merge_sboms "$nix_sbom" "$go_sbom" "$OUT_DIR/app-$svc.cdx.json"
+              rm -f "$nix_sbom" "$go_sbom"
+            # For Perl services, extract Perl/CPAN dependencies from source and merge
+            elif [ "$svc" = "audit-service" ]; then
+              perl_sbom="$OUT_DIR/app-$svc-perl.cdx.json"
+              src_dir="$REPO_ROOT/services/$svc"
+              gen_perl_sbom "app-$svc (perl)" "$src_dir" "$perl_sbom"
+              merge_sboms "$nix_sbom" "$perl_sbom" "$OUT_DIR/app-$svc.cdx.json"
+              rm -f "$nix_sbom" "$perl_sbom"
+            # For Python services, extract Python/PyPI dependencies from source and merge
+            elif [ "$svc" = "fee-service" ]; then
+              python_sbom="$OUT_DIR/app-$svc-python.cdx.json"
+              src_dir="$REPO_ROOT/services/$svc"
+              gen_python_sbom "app-$svc (python)" "$src_dir" "$python_sbom"
+              merge_sboms "$nix_sbom" "$python_sbom" "$OUT_DIR/app-$svc.cdx.json"
+              rm -f "$nix_sbom" "$python_sbom"
+            # For Ruby services, extract Ruby/RubyGems dependencies from source and merge
+            elif [ "$svc" = "smoke-tests" ]; then
+              ruby_sbom="$OUT_DIR/app-$svc-ruby.cdx.json"
+              src_dir="$REPO_ROOT/services/$svc"
+              gen_ruby_sbom "app-$svc (ruby)" "$src_dir" "$ruby_sbom"
+              merge_sboms "$nix_sbom" "$ruby_sbom" "$OUT_DIR/app-$svc.cdx.json"
+              rm -f "$nix_sbom" "$ruby_sbom"
+            else
+              mv "$nix_sbom" "$OUT_DIR/app-$svc.cdx.json"
+            fi
           done
 
           echo "[sbom] wrote layer SBOMs to $OUT_DIR"

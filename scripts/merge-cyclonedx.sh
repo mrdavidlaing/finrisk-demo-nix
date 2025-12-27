@@ -1,0 +1,127 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+# Merge two CycloneDX SBOMs into one.
+#
+# Usage:
+#   merge-cyclonedx.sh <sbom1.json> <sbom2.json> <out.json>
+
+SBOM1="$1"
+SBOM2="$2"
+OUT_BOM="$3"
+
+JQ="${JQ:-jq}"
+
+if [ ! -f "$SBOM1" ] || [ ! -f "$SBOM2" ]; then
+  echo "missing input BOM(s)" >&2
+  exit 2
+fi
+
+hash="$(cat "$SBOM1" "$SBOM2" | sha256sum | awk '{print $1}')"
+uuid="${hash:0:8}-${hash:8:4}-${hash:12:4}-${hash:16:4}-${hash:20:12}"
+serial="urn:uuid:$uuid"
+
+$JQ -n   --arg specVersion "1.4"   --arg serialNumber "$serial"   --slurpfile bom1 "$SBOM1"   --slurpfile bom2 "$SBOM2"   '
+  def comp_key:
+    (if type == "object" and . != null then 
+      (. ["bom-ref"] // .purl // "")
+     else "" end);
+
+  def uniq_components($xs):
+    ($xs | map(select(. != null and type == "object")) | map(select(type == "object")) | unique_by(comp_key));
+
+  def normalize_deps($deps):
+    ($deps // [])
+    | map({
+        ref: .ref,
+        dependsOn: ((.dependsOn // []) | unique)
+      })
+    | group_by(.ref)
+    | map({
+        ref: .[0].ref,
+        dependsOn: (map(.dependsOn[]) | unique)
+      });
+
+  def merge_deps($a; $b):
+    normalize_deps(($a // []) + ($b // []))
+    | group_by(.ref)
+    | map({
+        ref: .[0].ref,
+        dependsOn: (map(.dependsOn[]) | unique)
+      });
+
+  # Find the main component from bom1 (Nix SBOM) - it should be in metadata.component
+  def get_main_component_ref($bom):
+    ($bom.metadata.component // {} | .["bom-ref"] // "");
+
+  # Normalize a name for comparison (lowercase, remove hyphens/underscores)
+  def normalize_name($name):
+    (if ($name | type) == "string" then $name else "" end) | ascii_downcase | gsub("-"; "") | gsub("_"; "");
+
+  # Check if a PURL is from a package manager
+  def is_pkg_mgr($purl):
+    (($purl // "") | startswith("pkg:npm")) or (($purl // "") | startswith("pkg:maven")) or (($purl // "") | startswith("pkg:nuget")) or (($purl // "") | startswith("pkg:cargo")) or (($purl // "") | startswith("pkg:golang")) or (($purl // "") | startswith("pkg:cpan")) or (($purl // "") | startswith("pkg:pypi")) or (($purl // "") | startswith("pkg:gem"));
+
+  # Find dependency component (npm, maven, nuget, cargo, golang, cpan, pypi, or gem) that matches the main component name
+  def find_dep_component($bom; $main_name):
+    ($bom.components // []) as $components
+    | ($bom.dependencies // []) as $deps
+    | (normalize_name($main_name)) as $normalized_main
+    # Filter to only package manager components first
+    | ($components | map(select(.purl != null and is_pkg_mgr(.purl)))) as $pkg_mgr_components
+    # Try multiple matching strategies in order
+    | (($pkg_mgr_components | map(select(try ((.name | type == "string") and (.name == $main_name)) catch false)) | if length > 0 then .[0] else null end) // 
+       ($pkg_mgr_components | map(select(try ((.name | type == "string") and (normalize_name(.name) == $normalized_main)) catch false)) | if length > 0 then .[0] else null end) // 
+       ($pkg_mgr_components | map(select(try ((.name | type == "string") and ((normalize_name(.name)) | contains($normalized_main) or $normalized_main | contains(normalize_name(.name)))) catch false)) | if length > 0 then .[0] else null end) // 
+       (if ($pkg_mgr_components | length) > 0 then ($pkg_mgr_components | map({comp: ., dep_count: ($deps | map(select(.ref == .["bom-ref"])) | length)}) | sort_by(.dep_count) | reverse | .[0].comp) else null end)) // null
+    | if . == null or type != "object" then null else . end;
+
+  # Get dependencies for a specific component ref
+  def get_deps_for_ref($deps; $ref):
+    ($deps // []) | map(select(.ref == $ref)) | .[0] // null | if . then .dependsOn // [] else [] end;
+
+  ($bom1[0]) as $b1
+  | ($bom2[0]) as $b2
+  
+  # Get main component ref from Nix SBOM
+  | (get_main_component_ref($b1)) as $main_ref
+  
+  # Find matching dependency component (npm or maven)
+  | ($b1.metadata.component.name // "") as $main_name
+  | (find_dep_component($b2; $main_name)) as $dep_component
+  | (if $dep_component and ($dep_component | type) == "object" then $dep_component["bom-ref"] // "" else "" end) as $dep_component_ref
+  
+  # Get dependency dependencies (from the dependency component if it exists)
+  | (if $dep_component and ($dep_component | type) == "object" and $dep_component_ref != "" then get_deps_for_ref($b2.dependencies; $dep_component_ref) else [] end) as $dep_deps
+  
+  # Merge all components, excluding the duplicate dependency component
+  | (uniq_components(($b1.components // []) + (($b2.components // []) | map(select(.["bom-ref"] != $dep_component_ref))))) as $all_components
+  
+  # Merge dependencies, linking dependency deps to main component
+  | (merge_deps($b1.dependencies; ($b2.dependencies // [] | map(select(.ref != $dep_component_ref))))) as $base_deps
+  
+  # Add dependency dependencies to main component if main_ref exists
+  | (if $main_ref != "" and ($dep_deps | length) > 0 then
+      ($base_deps | map(
+        if .ref == $main_ref then
+          . + {dependsOn: ((.dependsOn // []) + $dep_deps | unique)}
+        else .
+        end
+      ))
+    else
+      $base_deps
+    end) as $final_deps
+  
+  | {
+    bomFormat: ($b1.bomFormat // $b2.bomFormat // "CycloneDX"),
+    specVersion: $specVersion,
+    serialNumber: $serialNumber,
+    version: 1,
+    metadata: $b1.metadata,
+    components: $all_components,
+    dependencies: $final_deps
+  }
+' > "$OUT_BOM"
+
+echo "[merge] merged $SBOM1 + $SBOM2 -> $OUT_BOM"
+

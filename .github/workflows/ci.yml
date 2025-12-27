@@ -241,12 +241,22 @@ jobs:
           mkdir -p sboms
           SERVICES='${{ steps.set-services.outputs.services_list }}'
 
-          # Canonical CycloneDX SBOMs (base/runtime/app/container via compositions)
+          # Generate canonical CycloneDX SBOMs using Nix (base/runtime/app/container via compositions)
+          # This generates:
+          # - base.cdx.json: Base system components
+          # - runtime-*.cdx.json: Language runtime environments
+          # - app-*.cdx.json: Application-specific dependencies (includes npm deps for Node.js services)
+          # - container-*.cdx.json: Complete container SBOMs (base + runtime + app)
+          # This approach captures both Nix store dependencies and npm/Python/etc. dependencies
+          echo "Generating Nix-based CycloneDX SBOMs..."
           nix run .#generate-composed-sboms -- sboms
 
-          # SPDX SBOMs for GitHub Dependency Graph submission + attestations
+          # Generate SPDX SBOMs from container images for GitHub Dependency Graph
+          # GitHub Dependency Graph requires SPDX format and expects SBOMs generated from artifacts
+          # The SPDX SBOMs contain the same dependencies as container-*.cdx.json but in SPDX format
+          echo "Generating SPDX SBOMs from container images for GitHub Dependency Graph..."
           for service in $SERVICES; do
-            echo "Generating SPDX SBOM for $service..."
+            echo "Generating SPDX SBOM for $service from container image..."
             syft "transferx/$service:latest" -o spdx-json --file "sboms/$service.spdx.json"
           done
 
@@ -280,9 +290,12 @@ jobs:
           name: sboms
           path: sboms/
 
-      - name: Submit SBOM to GitHub Dependency Graph
+      - name: Submit Container SBOM to GitHub Dependency Graph
         uses: advanced-security/spdx-dependency-submission-action@v0.1.1
         with:
+          # Use the SPDX SBOM generated from the container image
+          # This corresponds to our container-{service}.cdx.json CycloneDX SBOM
+          # The SPDX SBOM contains the same dependencies as the container CycloneDX SBOM
           filePath: "sboms/${{ matrix.service }}.spdx.json"
 
   vulnerability-scan:
@@ -400,6 +413,7 @@ jobs:
         with:
           subject-name: ${{ env.REGISTRY }}/${{ env.IMAGE_PREFIX }}/${{ matrix.service }}
           subject-digest: ${{ steps.push.outputs.digest }}
+          # Use the SPDX SBOM that corresponds to our container CycloneDX SBOM
           sbom-path: sboms/${{ matrix.service }}.spdx.json
           push-to-registry: true
 
@@ -424,6 +438,12 @@ jobs:
       - name: Create SBOM archive
         run: |
           cd sboms
+          # Include all SBOM types:
+          # - container-*.cdx.json: Complete container SBOMs (base + runtime + app)
+          # - app-*.cdx.json: Application-specific SBOMs
+          # - runtime-*.cdx.json: Runtime environment SBOMs
+          # - base.cdx.json: Base system SBOM
+          # - *.spdx.json: SPDX format for GitHub Dependency Graph
           zip -r ../transferx-sboms-${{ github.ref_name }}.zip *.cdx.json *.spdx.json
 
       - name: Upload SBOMs to release
