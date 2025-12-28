@@ -33,3 +33,4 @@ Feature: Money Transfer
     When I submit a SWIFT transfer of $100 USD to "bob"
     Then the transfer should be rejected with "KYC verification failed"
 
+

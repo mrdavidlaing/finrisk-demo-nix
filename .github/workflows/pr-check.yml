@@ -65,7 +65,7 @@ jobs:
       - name: Generate SBOMs for PR
         run: |
           mkdir -p pr-sboms
-          SERVICES="api-gateway kyc-service fee-service sanctions-service swift-gateway crypto-transfer audit-service web-portal"
+          SERVICES=$(nix eval --raw .#serviceRegistry.serviceList)
           for service in $SERVICES; do
             syft "transferx/$service:latest" -o cyclonedx-json --file "pr-sboms/$service.cdx.json"
           done
@@ -75,10 +75,10 @@ jobs:
         run: |
           echo "## SBOM Changes" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
-          
-          SERVICES="api-gateway kyc-service fee-service sanctions-service swift-gateway crypto-transfer audit-service web-portal"
+
+          SERVICES=$(nix eval --raw .#serviceRegistry.serviceList)
           HAS_CHANGES=false
-          
+
           for service in $SERVICES; do
             if [ -f "compliance/sboms/$service.cdx.json" ]; then
               # Extract component counts

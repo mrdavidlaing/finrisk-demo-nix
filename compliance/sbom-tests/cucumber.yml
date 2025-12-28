@@ -1,0 +1,17 @@
+default: --format progress --format json --out tmp/cucumber_results.json --publish-quiet
+
+fast: --tags @fast --format progress --publish-quiet
+slow: --tags "@slow and not @network" --format progress --publish-quiet
+network: --tags @network --format progress --publish-quiet
+
+# CI: everything except network tests
+ci: --tags "not @network" --format json --out tmp/cucumber_results.json --format progress --publish-quiet
+
+# Publish: fast tests with report publishing to reports.cucumber.io
+publish: --tags @fast --format progress --publish
+
+# Dev: skip enforced failures during exploration
+dev: --tags "not @enforce_fix" --format pretty --publish-quiet
+
+# Strict: only enforced requirements
+strict: --tags @enforce_fix --format pretty --strict --publish-quiet

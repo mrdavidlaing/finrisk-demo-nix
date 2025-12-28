@@ -1,0 +1,60 @@
+# CPE Vendor Mappings for NVD Compatibility
+# Maps package names to their correct CPE vendors as recognized by NVD
+
+vendor_mappings:
+  # GNU Components
+  glibc: gnu
+  bash: gnu
+  gcc: gnu
+  binutils: gnu
+  coreutils: gnu
+  findutils: gnu
+  gawk: gnu
+  grep: gnu
+  gzip: gnu
+  make: gnu
+  sed: gnu
+  tar: gnu
+
+  # OpenSSL
+  openssl: openssl
+
+  # Programming Languages
+  python: python
+  python3: python
+  nodejs: nodejs
+  go: golang
+  dotnet: microsoft
+
+  # Common Libraries
+  zlib: zlib
+  curl: haxx
+  libxml2: xmlsoft
+  sqlite: sqlite
+
+  # System Components
+  systemd: freedesktop
+  dbus: freedesktop
+
+# Version Normalization Rules
+version_normalization:
+  # Remove Nix package suffixes (e.g., 2.40-66 -> 2.40)
+  remove_nix_suffix: true
+  suffix_pattern: '-[0-9]+$'
+
+# CPE Format Rules
+cpe_format:
+  version: '2.3'
+  part_mappings:
+    library: 'a'        # Application
+    application: 'a'    # Application
+    framework: 'a'      # Application
+    os: 'o'             # Operating System
+    hardware: 'h'       # Hardware
+
+# Notes on CPE Construction
+# CPE Format: cpe:2.3:part:vendor:product:version:update:edition:language:sw_edition:target_sw:target_hw:other
+# Part: a (application), o (operating system), h (hardware)
+# Vendor: Lowercase, no spaces (use underscores)
+# Product: Lowercase, no spaces (use underscores)
+# Version: Semantic version, no package suffixes

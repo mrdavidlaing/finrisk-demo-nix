@@ -94,8 +94,8 @@ SKIPPED=0
 # SBOM directory
 SBOM_DIR="${SBOM_DIR:-compliance/sboms}"
 
-# Services
-SERVICES="api-gateway kyc-service fee-service sanctions-service swift-gateway crypto-transfer audit-service web-portal smoke-tests"
+# Services - get from service registry
+SERVICES=$(nix eval --raw .#serviceRegistry.serviceList 2>/dev/null || echo "api-gateway kyc-service fee-service sanctions-service swift-gateway crypto-transfer audit-service web-portal smoke-tests")
 
 echo ""
 echo -e "${BLUE}Uploading container CycloneDX SBOMs...${NC}"

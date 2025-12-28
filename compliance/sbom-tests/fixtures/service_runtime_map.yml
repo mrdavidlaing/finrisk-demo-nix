@@ -1,0 +1,143 @@
+# Service to Runtime Mapping
+# Maps each service container to its expected runtime and app SBOM
+
+services:
+  api-gateway:
+    container_sbom: container-api-gateway.cdx.json
+    runtime: native
+    runtime_sbom: runtime-native.cdx.json
+    app_sbom: app-api-gateway.cdx.json
+    description: "Native (statically compiled) API gateway service"
+    expected_app_components:
+      - api-gateway
+
+  audit-service:
+    container_sbom: container-audit-service.cdx.json
+    runtime: perl
+    runtime_sbom: runtime-perl.cdx.json
+    app_sbom: app-audit-service.cdx.json
+    description: "Perl-based audit service"
+    expected_runtime_components:
+      - perl
+    expected_app_components:
+      - audit-service
+
+  crypto-transfer:
+    container_sbom: container-crypto-transfer.cdx.json
+    runtime: native
+    runtime_sbom: runtime-native.cdx.json
+    app_sbom: app-crypto-transfer.cdx.json
+    description: "Native (statically compiled) crypto transfer service"
+    expected_app_components:
+      - crypto-transfer
+
+  fee-service:
+    container_sbom: container-fee-service.cdx.json
+    runtime: python
+    runtime_sbom: runtime-python.cdx.json
+    app_sbom: app-fee-service.cdx.json
+    description: "Python-based fee calculation service"
+    expected_runtime_components:
+      - python
+      - pip
+    expected_app_components:
+      - fee-service
+
+  kyc-service:
+    container_sbom: container-kyc-service.cdx.json
+    runtime: dotnet
+    runtime_sbom: runtime-dotnet.cdx.json
+    app_sbom: app-kyc-service.cdx.json
+    description: ".NET-based KYC service"
+    expected_runtime_components:
+      - dotnet
+      - aspnetcore
+    expected_app_components:
+      - kyc-service
+
+  sanctions-service:
+    container_sbom: container-sanctions-service.cdx.json
+    runtime: java
+    runtime_sbom: runtime-java.cdx.json
+    app_sbom: app-sanctions-service.cdx.json
+    description: "Java-based sanctions screening service"
+    expected_runtime_components:
+      - openjdk
+    expected_app_components:
+      - sanctions-service
+
+  smoke-tests:
+    container_sbom: container-smoke-tests.cdx.json
+    runtime: ruby
+    runtime_sbom: runtime-ruby.cdx.json
+    app_sbom: app-smoke-tests.cdx.json
+    description: "Ruby-based smoke test suite"
+    expected_runtime_components:
+      - ruby
+    expected_app_components:
+      - smoke-tests
+
+  swift-gateway:
+    container_sbom: container-swift-gateway.cdx.json
+    runtime: native
+    runtime_sbom: runtime-native.cdx.json
+    app_sbom: app-swift-gateway.cdx.json
+    description: "Native (statically compiled) SWIFT gateway service"
+    expected_app_components:
+      - swift-gateway
+
+  web-portal:
+    container_sbom: container-web-portal.cdx.json
+    runtime: node
+    runtime_sbom: runtime-node.cdx.json
+    app_sbom: app-web-portal.cdx.json
+    description: "Node.js-based web portal"
+    expected_runtime_components:
+      - nodejs
+      - npm
+    expected_app_components:
+      - web-portal
+
+# Common base layer for all services
+common_base:
+  sbom: base.cdx.json
+  description: "Shared base layer for all containers"
+  expected_components:
+    - glibc
+    - bash
+    - coreutils
+    - openssl
+    - curl
+    - tzdata
+
+# Layer composition rules
+composition_rules:
+  all_containers:
+    - must_reference:
+        - base.cdx.json
+        - "runtime-*.cdx.json"
+        - "app-*.cdx.json"
+    - aggregate_type: complete
+    - assembly_count: 3
+
+# PURL validation rules
+purl_rules:
+  nix_packages:
+    format: "pkg:nix/{name}@{version}"
+    version_format: "Should not have package suffixes for non-Nix ecosystems"
+
+  npm_packages:
+    format: "pkg:npm/{name}@{version}"
+    version_format: "Semantic versioning (X.Y.Z)"
+
+  pypi_packages:
+    format: "pkg:pypi/{name}@{version}"
+    version_format: "PEP 440 versioning"
+
+  nuget_packages:
+    format: "pkg:nuget/{name}@{version}"
+    version_format: "Semantic versioning (X.Y.Z)"
+
+  golang_packages:
+    format: "pkg:golang/{namespace}/{name}@{version}"
+    version_format: "Semantic versioning or commit hash"

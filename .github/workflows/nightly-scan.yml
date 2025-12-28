@@ -111,3 +111,4 @@ jobs:
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "View detailed results in the **Security** tab → **Code scanning alerts**" >> $GITHUB_STEP_SUMMARY
 
+

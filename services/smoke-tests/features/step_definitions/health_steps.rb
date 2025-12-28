@@ -35,3 +35,4 @@ Then('the audit-service should be healthy') do
   expect(response.status).to eq(200), "Services are not accessible"
 end
 
+

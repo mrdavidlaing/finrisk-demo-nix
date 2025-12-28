@@ -119,7 +119,7 @@ vulns:
     #!/usr/bin/env bash
     set -euo pipefail
     mkdir -p compliance/vulns
-    SERVICES="api-gateway kyc-service fee-service sanctions-service swift-gateway crypto-transfer audit-service web-portal smoke-tests"
+    SERVICES=$(nix eval --raw .#serviceRegistry.serviceList)
     for service in $SERVICES; do
         echo "Scanning $service for vulnerabilities..."
         grype "compliance/sboms/container-$service.cdx.json" -o json --file "compliance/vulns/$service.json"
@@ -169,6 +169,41 @@ upload-sboms:
     
     # Run upload script
     ./scripts/upload-sboms-to-dtrack.sh
+
+# ============================================================================
+# SBOM Testing Targets
+# ============================================================================
+
+# Run all SBOM validation tests (fast tests only)
+test-sboms:
+    cd compliance/sbom-tests && bundle exec cucumber --profile fast
+
+# Run SBOM tests and publish report to reports.cucumber.io
+test-sboms-publish:
+    cd compliance/sbom-tests && bundle exec cucumber --profile publish
+
+# Run SBOM tests with specific profile (fast, slow, network, ci, strict, publish)
+test-sboms-profile profile:
+    cd compliance/sbom-tests && bundle exec cucumber --profile {{profile}}
+
+# Run all SBOM tests except network tests (for CI)
+test-sboms-ci:
+    cd compliance/sbom-tests && bundle exec cucumber --profile ci
+
+# Run only enforcement tests (tests that define requirements)
+test-sboms-strict:
+    cd compliance/sbom-tests && bundle exec cucumber --profile strict
+
+# Run a specific SBOM feature file
+test-sbom-feature feature:
+    cd compliance/sbom-tests && bundle exec cucumber features/{{feature}}.feature
+
+# Install SBOM test dependencies
+setup-sbom-tests:
+    cd compliance/sbom-tests && bundle install
+
+# Generate SBOMs and test in one command
+sboms-with-tests: sboms test-sboms
 
 # ============================================================================
 # Testing Targets

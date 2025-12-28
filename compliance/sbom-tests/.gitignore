@@ -1,0 +1,16 @@
+# Bundle
+.bundle/
+vendor/
+
+# Test results
+tmp/
+*.log
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# Gem lockfile (generated per machine)
+Gemfile.lock

@@ -1,0 +1,15 @@
+source 'https://rubygems.org'
+
+gem 'cucumber', '~> 9.0'
+gem 'rspec-expectations', '~> 3.12'
+gem 'json', '~> 2.6'
+gem 'json-schema', '~> 4.0'      # CycloneDX schema validation
+gem 'faraday', '~> 2.0'          # NVD API calls
+gem 'faraday-retry', '~> 2.0'    # Rate limiting
+gem 'vcr', '~> 6.0'              # Record/replay HTTP for network tests
+gem 'webmock', '~> 3.18'         # Mock HTTP
+
+group :development do
+  gem 'pry', '~> 0.14'
+  gem 'rubocop', '~> 1.50'
+end

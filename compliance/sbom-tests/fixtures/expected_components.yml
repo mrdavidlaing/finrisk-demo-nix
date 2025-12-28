@@ -1,0 +1,112 @@
+# Expected Components in Each SBOM Layer
+# Used to validate layer composition and detect contamination
+
+base_layer:
+  description: "Core system libraries and utilities present in all containers"
+  minimum_components: 20
+  expected_components:
+    # Core C Library
+    - name: glibc
+      type: library
+      vendor: gnu
+
+    # Shell and Utilities
+    - name: bash
+      type: application
+      vendor: gnu
+
+    - name: coreutils
+      type: library
+      vendor: gnu
+
+    # Compression
+    - name: gzip
+      type: application
+      vendor: gnu
+
+    - name: bzip2
+      type: application
+      vendor: bzip
+
+    # Networking
+    - name: curl
+      type: library
+      vendor: haxx
+
+    - name: openssl
+      type: library
+      vendor: openssl
+
+    # System
+    - name: zlib
+      type: library
+      vendor: zlib
+
+    - name: tzdata
+      type: library
+      vendor: iana
+
+  forbidden_components:
+    # Application frameworks should NOT be in base layer
+    - express
+    - flask
+    - spring-boot
+    - kestrel
+
+    # CI/CD files should NOT be in any layer
+    - pattern: '\.github/workflows/'
+    - pattern: '\.gitlab-ci\.yml'
+    - pattern: '\.travis\.yml'
+
+runtime_nodejs:
+  description: "Node.js runtime and core npm packages"
+  minimum_components: 5
+  expected_components:
+    - name: nodejs
+      type: application
+      vendor: nodejs
+
+    - name: npm
+      type: application
+      vendor: npm
+
+runtime_python:
+  description: "Python runtime and core packages"
+  minimum_components: 5
+  expected_components:
+    - name: python
+      type: application
+      vendor: python
+
+    - name: pip
+      type: application
+      vendor: python
+
+runtime_go:
+  description: "Go runtime"
+  minimum_components: 5
+  expected_components:
+    - name: go
+      type: application
+      vendor: golang
+
+runtime_dotnet:
+  description: ".NET runtime"
+  minimum_components: 5
+  expected_components:
+    - name: dotnet
+      type: application
+      vendor: microsoft
+
+app_layer:
+  description: "Application-specific dependencies"
+  minimum_components: 1
+  notes: "Highly variable based on application requirements"
+
+container_layer:
+  description: "Composed SBOM aggregating all layers"
+  validation_rules:
+    - component_count: "Should be >= sum(base + runtime + app)"
+    - deduplication: "Same component across containers must have identical PURL"
+    - compositions: "Must reference all three layer SBOMs"
+    - external_refs: "Metadata must link to layer SBOMs"

@@ -11,6 +11,7 @@ SBOM2="$2"
 OUT_BOM="$3"
 
 JQ="${JQ:-jq}"
+JQ_UTILS="${JQ_UTILS:-}"
 
 if [ ! -f "$SBOM1" ] || [ ! -f "$SBOM2" ]; then
   echo "missing input BOM(s)" >&2
@@ -21,14 +22,21 @@ hash="$(cat "$SBOM1" "$SBOM2" | sha256sum | awk '{print $1}')"
 uuid="${hash:0:8}-${hash:8:4}-${hash:12:4}-${hash:16:4}-${hash:20:12}"
 serial="urn:uuid:$uuid"
 
-$JQ -n   --arg specVersion "1.4"   --arg serialNumber "$serial"   --slurpfile bom1 "$SBOM1"   --slurpfile bom2 "$SBOM2"   '
+# Load shared JQ utilities if available, otherwise define inline
+if [ -n "$JQ_UTILS" ] && [ -f "$JQ_UTILS" ]; then
+  JQ_FUNCS="$(cat "$JQ_UTILS")"
+else
+  # Fallback: inline definitions (for backward compatibility)
+  JQ_FUNCS='
   def comp_key:
-    (if type == "object" and . != null then 
-      (. ["bom-ref"] // .purl // "")
-     else "" end);
+    (if type == "object" and . != null then
+      (. ["bom-ref"] // .purl // (.group + "/" + .name + "@" + (.version // "")) // .name // "")
+    else "" end);
 
   def uniq_components($xs):
-    ($xs | map(select(. != null and type == "object")) | map(select(type == "object")) | unique_by(comp_key));
+    ($xs
+    | map(select(. != null and type == "object"))
+    | unique_by(comp_key));
 
   def normalize_deps($deps):
     ($deps // [])
@@ -49,6 +57,11 @@ $JQ -n   --arg specVersion "1.4"   --arg serialNumber "$serial"   --slurpfile bo
         ref: .[0].ref,
         dependsOn: (map(.dependsOn[]) | unique)
       });
+'
+fi
+
+$JQ -n   --arg specVersion "1.6"   --arg serialNumber "$serial"   --slurpfile bom1 "$SBOM1"   --slurpfile bom2 "$SBOM2"   '
+'"$JQ_FUNCS"'
 
   # Find the main component from bom1 (Nix SBOM) - it should be in metadata.component
   def get_main_component_ref($bom):
@@ -63,17 +76,17 @@ $JQ -n   --arg specVersion "1.4"   --arg serialNumber "$serial"   --slurpfile bo
     (($purl // "") | startswith("pkg:npm")) or (($purl // "") | startswith("pkg:maven")) or (($purl // "") | startswith("pkg:nuget")) or (($purl // "") | startswith("pkg:cargo")) or (($purl // "") | startswith("pkg:golang")) or (($purl // "") | startswith("pkg:cpan")) or (($purl // "") | startswith("pkg:pypi")) or (($purl // "") | startswith("pkg:gem"));
 
   # Find dependency component (npm, maven, nuget, cargo, golang, cpan, pypi, or gem) that matches the main component name
+  # Only returns a component if it is a CLEAR name match - otherwise returns null
   def find_dep_component($bom; $main_name):
     ($bom.components // []) as $components
     | ($bom.dependencies // []) as $deps
     | (normalize_name($main_name)) as $normalized_main
     # Filter to only package manager components first
     | ($components | map(select(.purl != null and is_pkg_mgr(.purl)))) as $pkg_mgr_components
-    # Try multiple matching strategies in order
-    | (($pkg_mgr_components | map(select(try ((.name | type == "string") and (.name == $main_name)) catch false)) | if length > 0 then .[0] else null end) // 
-       ($pkg_mgr_components | map(select(try ((.name | type == "string") and (normalize_name(.name) == $normalized_main)) catch false)) | if length > 0 then .[0] else null end) // 
-       ($pkg_mgr_components | map(select(try ((.name | type == "string") and ((normalize_name(.name)) | contains($normalized_main) or $normalized_main | contains(normalize_name(.name)))) catch false)) | if length > 0 then .[0] else null end) // 
-       (if ($pkg_mgr_components | length) > 0 then ($pkg_mgr_components | map({comp: ., dep_count: ($deps | map(select(.ref == .["bom-ref"])) | length)}) | sort_by(.dep_count) | reverse | .[0].comp) else null end)) // null
+    # Only try exact or normalized name matches - DO NOT use fallback heuristics
+    # This prevents false positives where unrelated dependencies get excluded
+    | (($pkg_mgr_components | map(select(try ((.name | type == "string") and (.name == $main_name)) catch false)) | if length > 0 then .[0] else null end) //
+       ($pkg_mgr_components | map(select(try ((.name | type == "string") and (normalize_name(.name) == $normalized_main)) catch false)) | if length > 0 then .[0] else null end)) // null
     | if . == null or type != "object" then null else . end;
 
   # Get dependencies for a specific component ref

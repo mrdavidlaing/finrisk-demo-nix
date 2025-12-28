@@ -15,6 +15,7 @@ IMAGE_NAME="$6"
 IMAGE_VERSION="$7"
 
 JQ="${JQ:-jq}"
+JQ_UTILS="${JQ_UTILS:-}"
 
 if [ ! -f "$BASE_BOM" ] || [ ! -f "$RUNTIME_BOM" ] || [ ! -f "$APP_BOM" ]; then
   echo "missing input BOM(s)" >&2
@@ -25,17 +26,21 @@ hash="$(cat "$BASE_BOM" "$RUNTIME_BOM" "$APP_BOM" | sha256sum | awk '{print $1}'
 uuid="${hash:0:8}-${hash:8:4}-${hash:12:4}-${hash:16:4}-${hash:20:12}"
 serial="urn:uuid:$uuid"
 
-$JQ -n   --arg specVersion "1.5"   --arg serialNumber "$serial"   --arg service "$SERVICE"   --arg imageName "$IMAGE_NAME"   --arg imageVersion "$IMAGE_VERSION"   --arg baseFile "$(basename "$BASE_BOM")"   --arg runtimeFile "$(basename "$RUNTIME_BOM")"   --arg appFile "$(basename "$APP_BOM")"   --slurpfile base "$BASE_BOM"   --slurpfile runtime "$RUNTIME_BOM"   --slurpfile app "$APP_BOM"   '
-  def bom_component($b):
-    ($b[0].metadata.component // { "type":"application", "name":"unknown", "version":"0", "bom-ref":"unknown" })
-    | . as $c
-    | if ($c["bom-ref"]? // "") == "" then ($c + {"bom-ref": ($c.purl // $c.name // "unknown")}) else $c end;
-
+# Load shared JQ utilities if available, otherwise define inline
+if [ -n "$JQ_UTILS" ] && [ -f "$JQ_UTILS" ]; then
+  JQ_FUNCS="$(cat "$JQ_UTILS")"
+else
+  # Fallback: inline definitions (for backward compatibility)
+  JQ_FUNCS='
   def comp_key:
-    (. ["bom-ref"] // .purl // (.group + "/" + .name + "@" + (.version // "")) // .name);
+    (if type == "object" and . != null then
+      (. ["bom-ref"] // .purl // (.group + "/" + .name + "@" + (.version // "")) // .name // "")
+    else "" end);
 
   def uniq_components($xs):
-    ($xs | map(select(. != null)) | unique_by(comp_key));
+    ($xs
+    | map(select(. != null and type == "object"))
+    | unique_by(comp_key));
 
   def normalize_deps($deps):
     ($deps // [])
@@ -56,6 +61,16 @@ $JQ -n   --arg specVersion "1.5"   --arg serialNumber "$serial"   --arg service 
         ref: .[0].ref,
         dependsOn: (map(.dependsOn[]) | unique)
       });
+'
+fi
+
+$JQ -n   --arg specVersion "1.6"   --arg serialNumber "$serial"   --arg service "$SERVICE"   --arg imageName "$IMAGE_NAME"   --arg imageVersion "$IMAGE_VERSION"   --arg baseFile "$(basename "$BASE_BOM")"   --arg runtimeFile "$(basename "$RUNTIME_BOM")"   --arg appFile "$(basename "$APP_BOM")"   --slurpfile base "$BASE_BOM"   --slurpfile runtime "$RUNTIME_BOM"   --slurpfile app "$APP_BOM"   '
+'"$JQ_FUNCS"'
+
+  def bom_component($b):
+    ($b[0].metadata.component // { "type":"application", "name":"unknown", "version":"0", "bom-ref":"unknown" })
+    | . as $c
+    | if ($c["bom-ref"]? // "") == "" then ($c + {"bom-ref": ($c.purl // $c.name // "unknown")}) else $c end;
 
   ($base[0]) as $baseBom
   | ($runtime[0]) as $runtimeBom
@@ -107,11 +122,12 @@ $JQ -n   --arg specVersion "1.5"   --arg serialNumber "$serial"   --arg service 
       ),
       compositions: [
         {
+          "bom-ref": ("composition:" + $service),
           aggregate: "complete",
           assemblies: [
-            ($baseC["bom-ref"]),
-            ($runtimeC["bom-ref"]),
-            ($appC["bom-ref"])
+            $baseFile,
+            $runtimeFile,
+            $appFile
           ],
           dependencies: [ $containerRef ]
         }

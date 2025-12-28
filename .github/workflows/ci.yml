@@ -230,10 +230,11 @@ jobs:
       - name: Set services list
         id: set-services
         run: |
-          SERVICES_JSON='["api-gateway","kyc-service","fee-service","sanctions-service","swift-gateway","crypto-transfer","audit-service","web-portal","smoke-tests"]'
+          # Get services from service registry
+          SERVICES_JSON=$(nix eval --json .#serviceRegistry.serviceNamesJson)
           echo "services=$SERVICES_JSON" >> $GITHUB_OUTPUT
           # Also set as space-separated for shell loops (trim trailing space)
-          SERVICES_LIST=$(echo $SERVICES_JSON | jq -r '.[]' | tr '\n' ' ' | xargs)
+          SERVICES_LIST=$(nix eval --raw .#serviceRegistry.serviceList)
           echo "services_list=$SERVICES_LIST" >> $GITHUB_OUTPUT
 
       - name: Generate SBOMs
