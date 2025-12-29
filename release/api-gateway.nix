@@ -5,7 +5,7 @@ pkgs.buildGoModule {
   version = "0.1.0";
   src = ../services/api-gateway;
   
-  vendorHash = "sha256-Zx03iHfwo0vqKbGA2ZV0UIvN7fH+YpsXdwsWoCQsw8U=";
+  vendorHash = "sha256-cdr/WiWQL+kZ3JhFwFDJP1JBupx3jaH9Y4UbkLIMpFc=";
   
   meta = with lib; {
     description = "TransferX API Gateway";
