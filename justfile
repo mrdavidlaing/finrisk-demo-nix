@@ -142,33 +142,8 @@ vuln-summary:
     done
 
 # Upload SBOMs to Dependency Track
-upload-sboms:
-    #!/usr/bin/env bash
-    set -euo pipefail
-    
-    # Check for API key
-    if [ -z "${DEPENDENCY_TRACK_API_KEY:-}" ]; then
-        echo "Error: DEPENDENCY_TRACK_API_KEY environment variable is required"
-        echo "Get your API key from Dependency Track UI: Administration > Access Management > API Keys"
-        exit 1
-    fi
-    
-    # Check if SBOMs exist
-    if [ ! -d "compliance/sboms" ]; then
-        echo "Error: compliance/sboms directory not found"
-        echo "Run 'just sboms' (or 'just scan') to generate SBOMs first"
-        exit 1
-    fi
-    
-    # Check if any SBOMs exist
-    if [ -z "$(find compliance/sboms -name "*.cdx.json" 2>/dev/null | head -1)" ]; then
-        echo "Error: No SBOM files found in compliance/sboms"
-        echo "Run 'just sboms' (or 'just scan') to generate SBOMs first"
-        exit 1
-    fi
-    
-    # Run upload script
-    ./scripts/upload-sboms-to-dtrack.sh
+dt-upload-container-sboms:
+    compliance/dependency-track/upload-sboms.sh
 
 # ============================================================================
 # SBOM Testing Targets
@@ -204,6 +179,42 @@ setup-sbom-tests:
 
 # Generate SBOMs and test in one command
 sboms-with-tests: sboms test-sboms
+
+# ============================================================================
+# Dependency Track Targets
+# ============================================================================
+
+# Start Dependency Track with initial configuration
+dt-start:
+    compliance/dependency-track/dt-manage.sh start
+
+# Stop Dependency Track
+dt-stop:
+    compliance/dependency-track/dt-manage.sh stop
+
+# Clear all Dependency Track projects (preserves config)
+dt-reset:
+    compliance/dependency-track/dt-manage.sh reset
+
+# Show Dependency Track status
+dt-status:
+    compliance/dependency-track/dt-manage.sh status
+
+# Trigger vulnerability analysis for all projects
+dt-scan-vulnerabilities:
+    compliance/dependency-track/dt-manage.sh scan
+
+# Show Dependency Track logs
+dt-logs:
+    compliance/dependency-track/dt-manage.sh logs
+
+# Follow Dependency Track logs
+dt-logs-follow:
+    compliance/dependency-track/dt-manage.sh logs -f
+
+# Factory reset Dependency Track (removes all data)
+dt-clean:
+    compliance/dependency-track/dt-manage.sh clean
 
 # ============================================================================
 # Testing Targets

@@ -46,6 +46,9 @@ compliance/sboms/nix/
 compliance/vulns/*.json
 vulns-*.json
 
+# Dependency Track API key
+compliance/dependency-track/.dtrack.env
+
 # Docker
 *.tar
 

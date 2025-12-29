@@ -2,11 +2,12 @@
 # Script to upload SBOMs to OWASP Dependency Track
 #
 # Usage:
-#   ./scripts/upload-sboms-to-dtrack.sh
+#   ./upload-sboms.sh
 #
 # Environment variables:
 #   DEPENDENCY_TRACK_API_KEY (required) - API key for Dependency Track
 #   DEPENDENCY_TRACK_URL (optional) - Base URL for Dependency Track API (default: http://localhost:8081)
+#   SBOM_DIR (optional) - Directory containing SBOMs (default: ../../compliance/sboms/)
 #
 # The script will:
 #   1. Get version from git describe
@@ -18,6 +19,9 @@
 
 set -euo pipefail
 
+# Script directory
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+
 # Colors for output
 RED='\033[0;31m'
 GREEN='\033[0;32m'
@@ -28,11 +32,23 @@ NC='\033[0m' # No Color
 # Configuration
 DT_URL="${DEPENDENCY_TRACK_URL:-http://localhost:8081}"
 DT_API_KEY="${DEPENDENCY_TRACK_API_KEY:-}"
+ENV_FILE="${SCRIPT_DIR}/.dtrack.env"
+
+# Load API key from .dtrack.env if not set in environment
+if [ -z "$DT_API_KEY" ]; then
+    if [ -f "$ENV_FILE" ]; then
+        DT_API_KEY=$(grep DEPENDENCY_TRACK_API_KEY "$ENV_FILE" 2>/dev/null | cut -d= -f2)
+        if [ -n "$DT_API_KEY" ]; then
+            echo -e "${BLUE}Loaded API key from .dtrack.env${NC}"
+        fi
+    fi
+fi
 
 # Validate API key
 if [ -z "$DT_API_KEY" ]; then
     echo -e "${RED}Error: DEPENDENCY_TRACK_API_KEY environment variable is required${NC}" >&2
-    echo "Get your API key from Dependency Track UI: Administration > Access Management > API Keys" >&2
+    echo "Get your API key from Dependency Track UI: Administration > Access Management > Teams > Administrator > API Keys" >&2
+    echo "Or run 'just dt-start' to configure it automatically" >&2
     exit 1
 fi
 
@@ -91,8 +107,8 @@ UPLOADED=0
 FAILED=0
 SKIPPED=0
 
-# SBOM directory
-SBOM_DIR="${SBOM_DIR:-compliance/sboms}"
+# SBOM directory (relative to project root)
+SBOM_DIR="${SBOM_DIR:-${SCRIPT_DIR}/../sboms}"
 
 # Services - get from service registry
 SERVICES=$(nix eval --raw .#serviceRegistry.serviceList 2>/dev/null || echo "api-gateway kyc-service fee-service sanctions-service swift-gateway crypto-transfer audit-service web-portal smoke-tests")
