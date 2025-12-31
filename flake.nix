@@ -266,56 +266,66 @@
 
             echo "[sbom] $lang $name -> $out_file"
 
-            # Define manifest files for each language
-            case "$lang" in
-              npm)    manifests="package.json" ;;
-              maven)  manifests="pom.xml" ;;  # Will use JAR file instead
-              dotnet) manifests="*.csproj" ;;
-              rust)   manifests="Cargo.toml Cargo.lock" ;;
-              go)     manifests="go.mod" ;;
-              perl)   manifests="Makefile.PL cpanfile META.json" ;;
-              python) manifests="pyproject.toml requirements.txt Pipfile poetry.lock" ;;
-              ruby)   manifests="Gemfile Gemfile.lock gems.rb" ;;
-              *)      echo "[sbom] error: unknown language: $lang" >&2; return 1 ;;
-            esac
+            # Case 1: Scan build output (preferred for compiled/bundled deps)
+            if [[ "$lang" == "maven" || "$lang" == "dotnet" || "$lang" == "go" || "$lang" == "rust" || "$lang" == "ruby" ]]; then
+               # Build the service
+               svc_path="$(nix build --no-link --print-out-paths "$REPO_ROOT"#$service)"
+               
+               target_path=""
+               case "$lang" in
+                 maven)  target_path="$(find "$svc_path/share/java" -name "*.jar" 2>/dev/null | head -1)" ;;
+                 dotnet) target_path="$svc_path/lib/$service" ;;
+                 go)     target_path="$svc_path/bin" ;;
+                 rust)   target_path="$svc_path/bin" ;;
+                 ruby)   target_path="$svc_path/share/$service" ;;
+               esac
 
-            # Special handling for maven: find and scan JAR file
-            if [ "$lang" = "maven" ]; then
-              svc_path="$(nix build --no-link --print-out-paths "$REPO_ROOT"#$service)"
-              jar_file="$(find "$svc_path/share/java" -name "*.jar" 2>/dev/null | head -1)"
-              if [ -n "$jar_file" ] && [ -f "$jar_file" ]; then
-                ${pkgs.syft}/bin/syft scan file:"$jar_file" -o cyclonedx-json --output "cyclonedx-json=$out_file" || {
-                  echo "[sbom] warning: failed to generate Maven SBOM for $name, continuing without it" >&2
+               if [ -e "$target_path" ]; then
+                  # Determine scan type (dir or file)
+                  if [ -d "$target_path" ]; then
+                    scan_type="dir"
+                  else
+                    scan_type="file"
+                  fi
+                  
+                  ${pkgs.syft}/bin/syft scan "$scan_type:$target_path" -o cyclonedx-json --output "cyclonedx-json=$out_file" || {
+                      echo "[sbom] warning: failed to generate $lang SBOM for $name, continuing without it" >&2
+                      echo '{"bomFormat":"CycloneDX","specVersion":"1.6","version":1,"components":[],"dependencies":[]}' > "$out_file"
+                  }
+               else
+                  echo "[sbom] warning: target path not found for $service ($lang) at $target_path, skipping SBOM" >&2
                   echo '{"bomFormat":"CycloneDX","specVersion":"1.6","version":1,"components":[],"dependencies":[]}' > "$out_file"
-                }
-              else
-                echo "[sbom] warning: no JAR file found for $service, skipping Maven SBOM" >&2
-                echo '{"bomFormat":"CycloneDX","specVersion":"1.6","version":1,"components":[],"dependencies":[]}' > "$out_file"
-              fi
-              return
+               fi
+               return
             fi
 
-            # For all other languages: scan source directory
+            # Case 2: Scan source (fallback for interpreted langs without bundled deps)
+            # Define manifest files for each language
+            case "$lang" in
+               perl)   manifests="Makefile.PL cpanfile META.json" ;;
+               python) manifests="pyproject.toml requirements.txt Pipfile poetry.lock" ;;
+               npm)    manifests="package.json" ;;
+               *)      echo "[sbom] error: unknown language: $lang" >&2; return 1 ;;
+            esac
+            
             src_dir="$REPO_ROOT/services/$service"
-
-            # Check if any manifest file exists
+            
             found=false
             for manifest in $manifests; do
-              # Handle glob patterns like *.csproj
-              if ls "$src_dir"/$manifest > /dev/null 2>&1; then
-                found=true
-                break
-              fi
+                if ls "$src_dir"/$manifest > /dev/null 2>&1; then
+                  found=true
+                  break
+                fi
             done
 
             if [ "$found" = "true" ]; then
-              ${pkgs.syft}/bin/syft scan dir:"$src_dir" -o cyclonedx-json --output "cyclonedx-json=$out_file" || {
-                echo "[sbom] warning: failed to generate $lang SBOM for $name, continuing without it" >&2
-                echo '{"bomFormat":"CycloneDX","specVersion":"1.6","version":1,"components":[],"dependencies":[]}' > "$out_file"
-              }
+                ${pkgs.syft}/bin/syft scan dir:"$src_dir" -o cyclonedx-json --output "cyclonedx-json=$out_file" || {
+                  echo "[sbom] warning: failed to generate $lang SBOM for $name, continuing without it" >&2
+                  echo '{"bomFormat":"CycloneDX","specVersion":"1.6","version":1,"components":[],"dependencies":[]}' > "$out_file"
+                }
             else
-              echo "[sbom] warning: no manifest files ($manifests) found for $service, skipping $lang SBOM" >&2
-              echo '{"bomFormat":"CycloneDX","specVersion":"1.6","version":1,"components":[],"dependencies":[]}' > "$out_file"
+                echo "[sbom] warning: no manifest files ($manifests) found for $service, skipping $lang SBOM" >&2
+                echo '{"bomFormat":"CycloneDX","specVersion":"1.6","version":1,"components":[],"dependencies":[]}' > "$out_file"
             fi
           }
 
@@ -357,6 +367,9 @@
               gen_lang_sbom "$lang" "app-$svc ($lang)" "$svc" "$lang_sbom"
               merge_sboms "$nix_sbom" "$lang_sbom" "$OUT_DIR/app-$svc.cdx.json"
               rm -f "$nix_sbom" "$lang_sbom"
+              
+              # Add Nix traceability and deduplicate
+              ${pkgs.python3}/bin/python3 ${./lib/sbom/add-nix-traceability.py} "$OUT_DIR/app-$svc.cdx.json"
             else
               # Native/COBOL services: just use Nix SBOM
               mv "$nix_sbom" "$OUT_DIR/app-$svc.cdx.json"

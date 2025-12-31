@@ -111,7 +111,8 @@ clean-all: clean clean-docker
 scan: sboms vulns
 
 # Generate comprehensive CycloneDX SBOMs (base/runtime/app/container)
-sboms:
+# Requires build to complete first so Syft can scan compiled outputs
+sboms: build
     nix run .#generate-composed-sboms -- compliance/sboms
 
 # Scan for vulnerabilities (requires SBOMs)

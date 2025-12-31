@@ -63,6 +63,8 @@ fi
 $JQ -n   --arg specVersion "1.6"   --arg serialNumber "$serial"   --slurpfile bom1 "$SBOM1"   --slurpfile bom2 "$SBOM2"   '
 '"$JQ_FUNCS"'
 
+
+
   # Find the main component from bom1 (Nix SBOM) - it should be in metadata.component
   def get_main_component_ref($bom):
     ($bom.metadata.component // {} | .["bom-ref"] // "");
@@ -99,25 +101,36 @@ $JQ -n   --arg specVersion "1.6"   --arg serialNumber "$serial"   --slurpfile bo
   # Get main component ref from Nix SBOM
   | (get_main_component_ref($b1)) as $main_ref
   
-  # Find matching dependency component (npm or maven)
+  # Find matching dependency component in b2 (to exclude it)
   | ($b1.metadata.component.name // "") as $main_name
   | (find_dep_component($b2; $main_name)) as $dep_component
   | (if $dep_component and ($dep_component | type) == "object" then $dep_component["bom-ref"] // "" else "" end) as $dep_component_ref
   
-  # Get dependency dependencies (from the dependency component if it exists)
-  | (if $dep_component and ($dep_component | type) == "object" and $dep_component_ref != "" then get_deps_for_ref($b2.dependencies; $dep_component_ref) else [] end) as $dep_deps
+  # Filter b2 components (exclude dep_component)
+  | (($b2.components // []) | map(select(.["bom-ref"] != $dep_component_ref))) as $b2_components_filtered
   
-  # Merge all components, excluding the duplicate dependency component
-  | (uniq_components(($b1.components // []) + (($b2.components // []) | map(select(.["bom-ref"] != $dep_component_ref))))) as $all_components
+  # Filter b2 dependencies (exclude entries for dep_component)
+  | (($b2.dependencies // []) | map(select(.ref != $dep_component_ref))) as $b2_deps_filtered
   
-  # Merge dependencies, linking dependency deps to main component
-  | (merge_deps($b1.dependencies; ($b2.dependencies // [] | map(select(.ref != $dep_component_ref))))) as $base_deps
+  # Identify roots in b2 (refs in components but not in any dependsOn)
+  # 1. Get all refs in filtered components
+  | ($b2_components_filtered | map(.["bom-ref"])) as $all_refs
+  # 2. Get all target refs in filtered dependencies
+  | ($b2_deps_filtered | map(.dependsOn[]) | unique) as $child_refs
+  # 3. Roots = all_refs - child_refs
+  | ($all_refs - $child_refs) as $roots
   
-  # Add dependency dependencies to main component if main_ref exists
-  | (if $main_ref != "" and ($dep_deps | length) > 0 then
+  # Merge components
+  | (uniq_components(($b1.components // []) + $b2_components_filtered)) as $all_components
+  
+  # Merge dependencies
+  | (merge_deps($b1.dependencies; $b2_deps_filtered)) as $base_deps
+  
+  # Add roots to main_ref
+  | (if $main_ref != "" and ($roots | length) > 0 then
       ($base_deps | map(
         if .ref == $main_ref then
-          . + {dependsOn: ((.dependsOn // []) + $dep_deps | unique)}
+          . + {dependsOn: ((.dependsOn // []) + $roots | unique)}
         else .
         end
       ))
