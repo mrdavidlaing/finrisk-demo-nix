@@ -334,3 +334,10 @@ update:
 info:
     nix flake show
 
+# ============================================================================
+# Container Filesystem Explorer
+# ============================================================================
+
+explode-containers:
+    ./scripts/explode-containers.sh
+
