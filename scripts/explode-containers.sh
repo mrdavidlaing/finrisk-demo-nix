@@ -37,7 +37,7 @@ while IFS= read -r layertar; do
     service=$(basename "$(dirname "$hash_dir")")
     echo "  Extracting layers for $service..."
     mkdir -p "tmp/containers/$service/layer-contents"
-    tar -xf "$layertar" -C "tmp/containers/$service/layer-contents" --transform 's|^\./||' --transform 's|^nix/store/||' --no-same-owner -m 2>/dev/null || true
+    tar -xf "$layertar" -C "tmp/containers/$service/layer-contents" --no-same-owner -m 2>/dev/null || true
 done < <(find tmp/containers -mindepth 2 -name "layer.tar" -type f)
 
 echo ""
