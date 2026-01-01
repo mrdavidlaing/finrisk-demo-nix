@@ -98,6 +98,36 @@ def find_nix_equivalent_from_passthru(
     return None
 
 
+def find_nix_component_by_name(
+    eco_pkg: EcosystemPackage, sbom: dict
+) -> Optional[Tuple[str, str]]:
+    """
+    Fallback: Find matching Nix component in SBOM by name matching.
+    Returns: (outPath, drvPath) tuple, or None if not found.
+    """
+    target_name = normalize_name(eco_pkg.name)
+    target_version = eco_pkg.version
+
+    # Look for Nix components (pkg:nix/*)
+    nix_components = sbom.get("components", [])
+    for nix_comp in nix_components:
+        purl = nix_comp.get("purl", "")
+        if not purl.startswith("pkg:nix/"):
+            continue
+
+        # Check if the Nix package name and version match
+        nix_name = normalize_name(nix_comp.get("name", ""))
+        nix_version = nix_comp.get("version", "")
+
+        # Match by name and version
+        if nix_name == target_name and nix_version == target_version:
+            # Extract store paths from component
+            # The purl format is pkg:nix/... which already has the store path
+            return (purl, purl)  # Return same for both as they're in the PURL
+
+    return None
+
+
 def add_traceability(component: dict, nix_info: Dict, scope: str) -> None:
     """
     Add Nix traceability properties and scope metadata to ecosystem component.
@@ -169,7 +199,7 @@ def process_sbom(sbom: dict, passthru_deps: Dict[str, List[Dict]]):
         if not eco_pkg:
             continue
 
-        # Try passthru-based matching
+        # Try passthru-based matching first (most accurate)
         if passthru_deps:
             result = find_nix_equivalent_from_passthru(eco_pkg, passthru_deps)
             if result:
@@ -178,7 +208,21 @@ def process_sbom(sbom: dict, passthru_deps: Dict[str, List[Dict]]):
                 mapped_count += 1
                 continue
 
-        # If no passthru match, track as unmapped
+        # Fallback: try to find Nix component in SBOM by name+version matching
+        nix_paths = find_nix_component_by_name(eco_pkg, sbom)
+        if nix_paths:
+            outPath, drvPath = nix_paths
+            nix_info = {
+                "name": eco_pkg.name,
+                "version": eco_pkg.version,
+                "outPath": outPath,
+                "drvPath": drvPath,
+            }
+            add_traceability(eco_comp, nix_info, "runtime")  # Default scope
+            mapped_count += 1
+            continue
+
+        # If no match, track as unmapped
         if eco_pkg.purl_type not in unmapped_types:
             unmapped_types[eco_pkg.purl_type] = []
         unmapped_types[eco_pkg.purl_type].append(eco_pkg.name)

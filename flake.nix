@@ -339,23 +339,14 @@
           }
 
           # Extract passthru SBOM dependencies for traceability
+          # TODO: Fix JSON serialization of passthru.sbomDependencies
+          # For now, return empty and let add-nix-traceability handle packages by name matching
           extract_sbom_deps() {
             local service="$1"
             local out_file="$2"
             
-            echo "[sbom] extracting passthru deps for $service"
-            
-            # Use Nix to build the JSON directly from sbomDependencies
-            # This avoids the issue where --json serializes derivations to strings
-            nix eval --raw "$REPO_ROOT#(let
-              deps = (builtins.getFlake \"$REPO_ROOT\").packages.\${builtins.currentSystem}.${service}.passthru.sbomDependencies;
-              toJson = builtins.toJSON;
-              runtime = map (p: { inherit (p) name version outPath drvPath; scope = \"runtime\"; }) deps.runtime;
-              devOnly = map (p: { inherit (p) name version outPath drvPath; scope = \"dev-only\"; }) deps.\"dev-only\";
-            in toJson { inherit runtime; dev-only = devOnly; })" 2>/dev/null > "$out_file" || {
-              echo "[sbom] warning: could not extract passthru deps for $service, skipping" >&2
-              echo '{"runtime":[],"dev-only":[]}' > "$out_file"
-            }
+            echo "[sbom] extracting passthru deps for $service (SKIPPED - TODO)"
+            echo '{"runtime":[],"dev-only":[]}' > "$out_file"
           }
 
           base_path="$(nix build --no-link --print-out-paths "$REPO_ROOT"#transferx-base-set)"
