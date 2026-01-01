@@ -152,7 +152,7 @@ dt-upload-container-sboms:
 
 # Run all SBOM validation tests (fast tests only)
 test-sboms:
-    cd compliance/sbom-tests && bundle exec cucumber --profile fast
+    nix run .#test-sboms -- compliance/sboms fast
 
 # Run SBOM tests and publish report to reports.cucumber.io
 test-sboms-publish:

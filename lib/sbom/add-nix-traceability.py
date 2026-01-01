@@ -112,18 +112,40 @@ def find_nix_component_by_name(
     nix_components = sbom.get("components", [])
     for nix_comp in nix_components:
         purl = nix_comp.get("purl", "")
-        if not purl.startswith("pkg:nix/"):
+        if not isinstance(purl, str) or not purl.startswith("pkg:nix/"):
             continue
 
         # Check if the Nix package name and version match
-        nix_name = normalize_name(nix_comp.get("name", ""))
+        nix_full_name = nix_comp.get("name", "")
         nix_version = nix_comp.get("version", "")
+
+        # Remove language prefixes from Nix names (e.g., "python3.11-", "ruby3.3-")
+        # This handles Python packages (python3.X-packagename) and Ruby packages (rubyX.X-gemname)
+        nix_name_normalized = nix_full_name
+        for prefix in [
+            "python3.11-",
+            "python3.10-",
+            "python3.9-",
+            "ruby3.3-",
+            "ruby3.2-",
+            "ruby3.1-",
+        ]:
+            if nix_full_name.startswith(prefix):
+                nix_name_normalized = nix_full_name[len(prefix) :]
+                break
+
+        nix_name = normalize_name(nix_name_normalized)
 
         # Match by name and version
         if nix_name == target_name and nix_version == target_version:
-            # Extract store paths from component
-            # The purl format is pkg:nix/... which already has the store path
-            return (purl, purl)  # Return same for both as they're in the PURL
+            # Extract store paths from Nix component properties
+            # sbomnix adds nix:output_path and nix:drv_path properties
+            props = {
+                p.get("name"): p.get("value") for p in nix_comp.get("properties", [])
+            }
+            out_path = props.get("nix:output_path", purl)
+            drv_path = props.get("nix:drv_path", purl)
+            return (out_path, drv_path)
 
     return None
 

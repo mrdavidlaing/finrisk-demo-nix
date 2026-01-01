@@ -17,9 +17,23 @@
     in
     (flake-utils.lib.eachDefaultSystem (system:
       let
+        # Overlay to fix gnucobol 3.2 build with GCC 14
+        # GCC 14 changed some warnings to errors, particularly around:
+        # - Function pointer types (C23 empty parentheses means no args, not unspecified)
+        # - Implicit function declarations
+        gnucobol-overlay = self: super: {
+          gnucobol = super.gnucobol.overrideAttrs (oldAttrs: {
+            NIX_CFLAGS_COMPILE = (oldAttrs.NIX_CFLAGS_COMPILE or "") + 
+              " -Wno-error=incompatible-pointer-types" +
+              " -Wno-error=int-conversion" +
+              " -Wno-error=implicit-function-declaration" +
+              " -std=gnu11";
+          });
+        };
+        
         pkgs = import nixpkgs {
           inherit system;
-          overlays = [ poetry2nix.overlays.default ];
+          overlays = [ poetry2nix.overlays.default gnucobol-overlay ];
         };
 
         # Import service packages
@@ -459,12 +473,22 @@
           SBOM_DIR="''${1:-compliance/sboms}"
           PROFILE="''${2:-ci}"
 
-          cd ${self}/compliance/sbom-tests
-
-          # Install dependencies if needed
-          if [ ! -d .bundle ]; then
-            ${pkgs.bundler}/bin/bundle install --path .bundle
+          # Use source directory if available, otherwise use store path
+          if [ -d compliance/sbom-tests ]; then
+            TEST_DIR="compliance/sbom-tests"
+          else
+            TEST_DIR="${self}/compliance/sbom-tests"
           fi
+
+          cd "$TEST_DIR"
+
+          # Configure bundler to use a writable cache directory
+          export GEM_HOME="$HOME/.local/share/gem"
+          export BUNDLE_CACHE_PATH="$HOME/.cache/bundler"
+          mkdir -p "$GEM_HOME" "$BUNDLE_CACHE_PATH"
+
+          # Install dependencies
+          ${pkgs.bundler}/bin/bundle install 2>/dev/null || ${pkgs.bundler}/bin/bundle install
 
           # Run tests
           ${pkgs.bundler}/bin/bundle exec cucumber --profile "$PROFILE"

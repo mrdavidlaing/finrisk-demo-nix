@@ -42,7 +42,10 @@ let
   };
    # Helper to extract gem metadata for SBOM as JSON-serializable values
   extractGemInfo = name: gem: {
-    name = builtins.toString (gem.gemName or name or "unknown");
+    name = builtins.toString (
+      if gem ? gemName then gem.gemName else
+      if name != null then name else "unknown"
+    );
     version = builtins.toString (gem.version or "unknown");
     outPath = builtins.toString gem.outPath;
     drvPath = builtins.toString gem.drvPath;
