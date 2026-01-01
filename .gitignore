@@ -57,3 +57,4 @@ compliance/dependency-track/.dtrack.env
 Thumbs.db
 
 
+.worktrees/
