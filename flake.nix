@@ -338,6 +338,26 @@
             ${pkgs.bash}/bin/bash ${./scripts/merge-cyclonedx.sh} "$nix_sbom" "$deps_sbom" "$out_file"
           }
 
+          # Extract passthru SBOM dependencies for traceability
+          extract_sbom_deps() {
+            local service="$1"
+            local out_file="$2"
+            
+            echo "[sbom] extracting passthru deps for $service"
+            
+            # Use Nix to build the JSON directly from sbomDependencies
+            # This avoids the issue where --json serializes derivations to strings
+            nix eval --raw "$REPO_ROOT#(let
+              deps = (builtins.getFlake \"$REPO_ROOT\").packages.\${builtins.currentSystem}.${service}.passthru.sbomDependencies;
+              toJson = builtins.toJSON;
+              runtime = map (p: { inherit (p) name version outPath drvPath; scope = \"runtime\"; }) deps.runtime;
+              devOnly = map (p: { inherit (p) name version outPath drvPath; scope = \"dev-only\"; }) deps.\"dev-only\";
+            in toJson { inherit runtime; dev-only = devOnly; })" 2>/dev/null > "$out_file" || {
+              echo "[sbom] warning: could not extract passthru deps for $service, skipping" >&2
+              echo '{"runtime":[],"dev-only":[]}' > "$out_file"
+            }
+          }
+
           base_path="$(nix build --no-link --print-out-paths "$REPO_ROOT"#transferx-base-set)"
           gen_sbomnix "base" "$base_path" "$OUT_DIR/base.cdx.json"
           normalize_sbom_version "$OUT_DIR/base.cdx.json"
@@ -368,8 +388,16 @@
               merge_sboms "$nix_sbom" "$lang_sbom" "$OUT_DIR/app-$svc.cdx.json"
               rm -f "$nix_sbom" "$lang_sbom"
               
-              # Add Nix traceability and deduplicate
-              ${pkgs.python3}/bin/python3 ${./lib/sbom/add-nix-traceability.py} "$OUT_DIR/app-$svc.cdx.json"
+              # Extract passthru dependencies for traceability
+              passthru_deps="$OUT_DIR/app-$svc-passthru.json"
+              extract_sbom_deps "$svc" "$passthru_deps"
+              
+              # Add Nix traceability with passthru data and deduplicate
+              ${pkgs.python3}/bin/python3 ${./lib/sbom/add-nix-traceability.py} \
+                --passthru-deps "$passthru_deps" \
+                "$OUT_DIR/app-$svc.cdx.json"
+              
+              rm -f "$passthru_deps"
             else
               # Native/COBOL services: just use Nix SBOM
               mv "$nix_sbom" "$OUT_DIR/app-$svc.cdx.json"

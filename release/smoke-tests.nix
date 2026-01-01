@@ -40,6 +40,14 @@ let
     inherit ruby;
     gemdir = gemdir;
   };
+   # Helper to extract gem metadata for SBOM as JSON-serializable values
+  extractGemInfo = name: gem: {
+    name = builtins.toString (gem.gemName or name or "unknown");
+    version = builtins.toString (gem.version or "unknown");
+    outPath = builtins.toString gem.outPath;
+    drvPath = builtins.toString gem.drvPath;
+  };
+  
 in
 pkgs.stdenv.mkDerivation {
   pname = "smoke-tests";
@@ -74,6 +82,23 @@ exec bundle exec cucumber "\$@"
 EOF
     chmod +x $out/bin/smoke-tests-cucumber
   '';
+  
+  # Expose gem dependencies for SBOM traceability
+  passthru = {
+    inherit ruby;
+    gemEnv = gems;
+    
+    sbomDependencies = {
+      # All gems are runtime dependencies for smoke-tests
+      runtime = builtins.map 
+        (name: extractGemInfo name gems.gems.${name})
+        (builtins.attrNames gems.gems);
+      dev-only = [];  # No dev-only gems for smoke-tests
+      all = builtins.map 
+        (name: extractGemInfo name gems.gems.${name})
+        (builtins.attrNames gems.gems);
+    };
+  };
   
   meta = with lib; {
     description = "TransferX Smoke Tests Service";

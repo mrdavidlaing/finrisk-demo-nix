@@ -2,18 +2,19 @@
 """
 Add Nix Traceability to Ecosystem Packages
 
-This script identifies and links ecosystem packages (pkg:pypi, pkg:gem, etc.)
-to their Nix build equivalents (pkg:nix/*), adding traceability properties and
-deduplicating components.
+This script adds Nix build provenance and scope metadata to ecosystem packages (PyPI, Gem, etc.)
+in CycloneDX SBOMs, enabling accurate vulnerability traceability and impact analysis.
 
 Usage:
-    python3 add-nix-traceability.py <sbom.json>
+    python3 add-nix-traceability.py [--passthru-deps FILE] <sbom.json>
 """
 
 import json
 import re
 import sys
-from typing import Optional, Dict, List
+import argparse
+import os
+from typing import Optional, Dict, List, Tuple
 from dataclasses import dataclass
 
 
@@ -53,222 +54,186 @@ def normalize_name(name: str) -> str:
     return name.lower().replace("-", "").replace("_", "")
 
 
-def extract_base_name(nix_name: str) -> Optional[str]:
+def load_passthru_deps(filepath: str) -> Dict[str, List[Dict]]:
     """
-    Extract base package name from Nix package name.
+    Load passthru dependency information from JSON file.
 
-    Examples:
-        python3.11-anyio -> anyio
-        ruby3.3-cucumber -> cucumber
-        python3-foo -> foo
+    Returns dict with 'runtime' and 'dev-only' keys containing lists of packages.
     """
-    patterns = [
-        r"^python\d+(?:\.\d+)?-(.+)$",
-        r"^ruby\d+(?:\.\d+)?-(.+)$",
-        r"^perl\d+(?:\.\d+)?-(.+)$",
-        r"^nodejs\d+(?:\.\d+)?-(.+)$",
-    ]
+    if not filepath or not os.path.exists(filepath):
+        return {"runtime": [], "dev-only": []}
 
-    for pattern in patterns:
-        match = re.match(pattern, nix_name)
-        if match:
-            return match.group(1)
+    try:
+        with open(filepath, "r") as f:
+            data = json.load(f)
+        return data
+    except Exception as e:
+        print(
+            f"[traceability] warning: failed to load passthru deps: {e}",
+            file=sys.stderr,
+        )
+        return {"runtime": [], "dev-only": []}
 
-    # No recognized pattern - return name as-is
-    return nix_name
 
-
-def find_nix_equivalent(
-    eco_pkg: EcosystemPackage, nix_components: List[dict]
-) -> Optional[dict]:
+def find_nix_equivalent_from_passthru(
+    eco_pkg: EcosystemPackage, passthru_deps: Dict[str, List[Dict]]
+) -> Optional[Tuple[Dict, str]]:
     """
-    Find Nix component matching an ecosystem package.
+    Find Nix component from passthru dependency data.
 
-    Mapping strategy:
-    - Python: pypi/X@V -> pkg:nix/python3.11-X@V
-    - Ruby: gem/X@V -> pkg:nix/ruby3.3-X@V
-    - Others: Attempt direct name match (likely to fail for bundled types)
+    Returns: (component_info, scope) tuple, or None if not found.
     """
     target_name = normalize_name(eco_pkg.name)
     target_version = eco_pkg.version
 
-    for nix_comp in nix_components:
-        nix_name = nix_comp.get("name", "")
-        nix_version = nix_comp.get("version", "")
+    # Check runtime dependencies first, then dev-only
+    for scope in ["runtime", "dev-only"]:
+        for dep in passthru_deps.get(scope, []):
+            dep_name = normalize_name(dep.get("name", ""))
+            dep_version = dep.get("version", "")
 
-        if nix_version != target_version:
-            continue
-
-        # Extract base name from Nix package name
-        base_name = extract_base_name(nix_name)
-        if base_name and normalize_name(base_name) == target_name:
-            return nix_comp
+            if dep_name == target_name and dep_version == target_version:
+                return (dep, scope)
 
     return None
 
 
-def add_traceability(component: dict, nix_component: dict) -> None:
-    """Add Nix traceability properties and external references to ecosystem component."""
-    # Extract Nix info from properties
-    nix_props = {}
-    for prop in nix_component.get("properties", []):
-        nix_props[prop["name"]] = prop["value"]
+def add_traceability(component: dict, nix_info: Dict, scope: str) -> None:
+    """
+    Add Nix traceability properties and scope metadata to ecosystem component.
 
-    nix_output = nix_props.get("nix:output_path", "")
-    nix_drv = nix_props.get("nix:drv_path", nix_component.get("bom-ref", ""))
-    nix_purl = nix_component.get("purl", "")
+    Args:
+        component: SBOM component dict to enhance
+        nix_info: Nix package info from passthru (name, version, outPath, drvPath)
+        scope: "runtime" or "dev-only"
+    """
+    # Generate Nix PURL from outPath
+    # e.g., /nix/store/xxx-python3.11-fastapi-0.104.1 -> pkg:nix/python3.11-fastapi@0.104.1
+    out_path = nix_info["outPath"]
+    base_name = os.path.basename(out_path)
+
+    # Extract version from the base name if possible
+    # Format is typically: python3.11-fastapi-0.104.1 or ruby3.3-cucumber-9.2.1
+    nix_purl = f"pkg:nix/{base_name}"
+
+    # Add Nix properties
+    props = component.setdefault("properties", [])
+    props.append({"name": "nix:purl", "value": nix_purl})
+    props.append({"name": "nix:drv", "value": nix_info["drvPath"]})
+    props.append({"name": "nix:output", "value": out_path})
+
+    # Add scope metadata
+    props.append({"name": "sbom:scope", "value": scope})
+
+    # Add component-level scope attribute for vulnerability scanners
+    # CycloneDX spec: "required" = runtime, "excluded" = not in final product
+    component["scope"] = "required" if scope == "runtime" else "excluded"
 
     # Add external reference to Nix store output
-    if nix_output:
-        ext_refs = component.setdefault("externalReferences", [])
-        ext_refs.append(
-            {
-                "type": "build-system",
-                "url": f"nix:store:{nix_output}",
-                "comment": "Nix derivation output",
-            }
-        )
-
-    # Add Nix traceability properties
-    props = component.setdefault("properties", [])
-
-    if nix_purl:
-        props.append({"name": "nix:purl", "value": nix_purl})
-    if nix_drv:
-        props.append({"name": "nix:drv", "value": nix_drv})
-    if nix_output:
-        props.append({"name": "nix:output", "value": nix_output})
+    ext_refs = component.setdefault("externalReferences", [])
+    ext_refs.append(
+        {
+            "type": "build-system",
+            "url": f"nix:store:{out_path}",
+            "comment": "Nix derivation output",
+        }
+    )
 
 
-def update_dependency_refs(
-    dependencies: List[dict], ref_mapping: Dict[str, str]
-) -> None:
-    """Update dependency graph to use new bom-refs after deduplication."""
-    for dep in dependencies:
-        # Update ref if it's in the mapping
-        old_ref = dep.get("ref")
-        if old_ref in ref_mapping:
-            dep["ref"] = ref_mapping[old_ref]
-
-        # Update dependsOn references
-        depends_on = dep.get("dependsOn", [])
-        for i, dep_ref in enumerate(depends_on):
-            if dep_ref in ref_mapping:
-                depends_on[i] = ref_mapping[dep_ref]
-
-
-def process_sbom(sbom: dict):
+def process_sbom(sbom: dict, passthru_deps: Dict[str, List[Dict]]):
     """
-    Process SBOM to add Nix traceability and deduplicate components.
+    Process SBOM to add Nix traceability and scope metadata.
 
-    Returns: (mapped_count, unmapped_types_count, removed_count)
+    Args:
+        sbom: CycloneDX SBOM dict
+        passthru_deps: Passthru dependency info with runtime and dev-only scopes
+
+    Returns: (mapped_count, unmapped_types_count)
     """
     components = sbom.get("components", [])
-    dependencies = sbom.get("dependencies", [])
 
-    # Separate components by type
-    nix_components = []
+    # Find ecosystem components (those without nix: prefix)
     ecosystem_components = []
-    other_components = []
-
     for comp in components:
         purl = comp.get("purl", "")
-        if purl.startswith("pkg:nix/"):
-            nix_components.append(comp)
-        elif purl.startswith("pkg:"):
+        if purl.startswith("pkg:") and not purl.startswith("pkg:nix/"):
             ecosystem_components.append(comp)
-        else:
-            other_components.append(comp)
 
-    # Build mappings: ecosystem -> nix
-    mappings: List = []  # List of (ecosystem_comp, nix_comp) tuples
-    unmapped_types: Dict[str, List[str]] = {}  # Track unmapped ecosystem types
+    # Track mapping statistics
+    mapped_count = 0
+    unmapped_types: Dict[str, List[str]] = {}
 
+    # Process each ecosystem component
     for eco_comp in ecosystem_components:
-        purl = eco_comp.get("purl", "")
-        eco_pkg = parse_purl(purl)
-
+        eco_pkg = parse_purl(eco_comp.get("purl", ""))
         if not eco_pkg:
             continue
 
-        nix_match = find_nix_equivalent(eco_pkg, nix_components)
-        if nix_match:
-            mappings.append((eco_comp, nix_match))
-        else:
-            # Track unmapped package type
-            if eco_pkg.purl_type not in unmapped_types:
-                unmapped_types[eco_pkg.purl_type] = []
-            unmapped_types[eco_pkg.purl_type].append(eco_pkg.name)
+        # Try passthru-based matching
+        if passthru_deps:
+            result = find_nix_equivalent_from_passthru(eco_pkg, passthru_deps)
+            if result:
+                nix_info, scope = result
+                add_traceability(eco_comp, nix_info, scope)
+                mapped_count += 1
+                continue
 
-    # Log unmapped packages (these will cause test failures)
+        # If no passthru match, track as unmapped
+        if eco_pkg.purl_type not in unmapped_types:
+            unmapped_types[eco_pkg.purl_type] = []
+        unmapped_types[eco_pkg.purl_type].append(eco_pkg.name)
+
+    # Log unmapped packages
     for purl_type, packages in unmapped_types.items():
-        package_count = len(packages)
         print(
-            f"[traceability] warning: {package_count} {purl_type} packages have no Nix equivalent",
+            f"[traceability] warning: {len(packages)} {purl_type} packages have no passthru match",
             file=sys.stderr,
         )
-        if package_count <= 5:
+        if len(packages) <= 5:
             print(f"  -> {', '.join(packages)}", file=sys.stderr)
 
-    # Create ref mapping: nix_bom_ref -> ecosystem_bom_ref
-    ref_mapping = {}
-    nix_to_remove = set()
-
-    for eco_comp, nix_comp in mappings:
-        eco_ref = eco_comp.get("bom-ref")
-        nix_ref = nix_comp.get("bom-ref")
-
-        # Add traceability to ecosystem component
-        add_traceability(eco_comp, nix_comp)
-
-        # Map old Nix ref to new ecosystem ref
-        ref_mapping[nix_ref] = eco_ref
-        nix_to_remove.add(nix_ref)
-
-    # Update dependency graph
-    update_dependency_refs(dependencies, ref_mapping)
-
-    # Remove duplicate Nix components
-    sbom["components"] = [
-        c for c in components if c.get("bom-ref") not in nix_to_remove
-    ]
-
-    return len(mappings), len(unmapped_types), len(nix_to_remove)
+    return mapped_count, len(unmapped_types)
 
 
 def main():
-    if len(sys.argv) < 2:
-        print("Usage: python3 add-nix-traceability.py <sbom.json>", file=sys.stderr)
-        sys.exit(1)
+    parser = argparse.ArgumentParser(
+        description="Add Nix traceability to ecosystem packages in SBOMs"
+    )
+    parser.add_argument("sbom_file", help="Path to SBOM file")
+    parser.add_argument(
+        "--passthru-deps", help="JSON file with passthru dependency information"
+    )
+    args = parser.parse_args()
 
-    sbom_path = sys.argv[1]
-
+    # Load SBOM
     try:
-        with open(sbom_path, "r") as f:
+        with open(args.sbom_file, "r") as f:
             sbom = json.load(f)
     except Exception as e:
-        print(f"Error reading {sbom_path}: {e}", file=sys.stderr)
+        print(f"Error reading {args.sbom_file}: {e}", file=sys.stderr)
         sys.exit(1)
 
+    # Load passthru dependencies
+    passthru_deps = load_passthru_deps(args.passthru_deps)
+
     # Process SBOM
-    mapped, unmapped_types, removed = process_sbom(sbom)
+    mapped, unmapped_types = process_sbom(sbom, passthru_deps)
 
     # Write back
     try:
-        with open(sbom_path, "w") as f:
+        with open(args.sbom_file, "w") as f:
             json.dump(sbom, f, indent=2)
     except Exception as e:
-        print(f"Error writing {sbom_path}: {e}", file=sys.stderr)
+        print(f"Error writing {args.sbom_file}: {e}", file=sys.stderr)
         sys.exit(1)
 
     # Report
     print(f"[traceability] mapped {mapped} ecosystem packages to Nix", file=sys.stderr)
     if unmapped_types:
         print(
-            f"[traceability] {unmapped_types} ecosystem types have no Nix equivalents",
+            f"[traceability] {unmapped_types} ecosystem types have no passthru match",
             file=sys.stderr,
         )
-    print(f"[traceability] removed {removed} duplicate Nix components", file=sys.stderr)
 
 
 if __name__ == "__main__":
