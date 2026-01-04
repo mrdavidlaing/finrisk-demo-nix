@@ -49,6 +49,26 @@ def parse_purl(purl_str: str) -> Optional[EcosystemPackage]:
     )
 
 
+def strip_language_prefix(name: str) -> str:
+    """
+    Strip language version prefixes from Nix package names.
+    
+    Examples:
+        python3.11-fastapi -> fastapi
+        ruby3.3-cucumber -> cucumber  
+        python3.10-pytest -> pytest
+    """
+    # Common language prefixes from Nix
+    prefixes = [
+        "python3.11-", "python3.10-", "python3.9-", "python3.12-",
+        "ruby3.3-", "ruby3.2-", "ruby3.1-",
+    ]
+    for prefix in prefixes:
+        if name.lower().startswith(prefix):
+            return name[len(prefix):]
+    return name
+
+
 def normalize_name(name: str) -> str:
     """Normalize package name for matching (lowercase, remove hyphens/underscores)."""
     return name.lower().replace("-", "").replace("_", "")
@@ -82,6 +102,14 @@ def find_nix_equivalent_from_passthru(
     Find Nix component from passthru dependency data.
 
     Returns: (component_info, scope) tuple, or None if not found.
+    
+    Note: The passthru data uses "out_path" and "drv_path" field names (not "outPath"/"drvPath")
+    to avoid Nix's special handling for derivation-like attribute sets.
+    
+    Matching strategy:
+    - Strip language prefix from Nix name (e.g., python3.11-pytest -> pytest)
+    - Normalize both names (lowercase, remove hyphens/underscores)
+    - Match by normalized name AND version
     """
     target_name = normalize_name(eco_pkg.name)
     target_version = eco_pkg.version
@@ -89,8 +117,12 @@ def find_nix_equivalent_from_passthru(
     # Check runtime dependencies first, then dev-only
     for scope in ["runtime", "dev-only"]:
         for dep in passthru_deps.get(scope, []):
-            dep_name = normalize_name(dep.get("name", ""))
+            raw_name = dep.get("name", "")
             dep_version = dep.get("version", "")
+            
+            # Strip language prefix before normalizing
+            stripped_name = strip_language_prefix(raw_name)
+            dep_name = normalize_name(stripped_name)
 
             if dep_name == target_name and dep_version == target_version:
                 return (dep, scope)
@@ -156,12 +188,16 @@ def add_traceability(component: dict, nix_info: Dict, scope: str) -> None:
 
     Args:
         component: SBOM component dict to enhance
-        nix_info: Nix package info from passthru (name, version, outPath, drvPath)
+        nix_info: Nix package info from passthru (name, version, out_path, drv_path)
+                  Note: Uses "out_path" and "drv_path" field names to avoid Nix coercion issues
         scope: "runtime" or "dev-only"
     """
-    # Generate Nix PURL from outPath
+    # Support both old field names (outPath/drvPath) and new ones (out_path/drv_path)
+    out_path = nix_info.get("out_path") or nix_info.get("outPath", "")
+    drv_path = nix_info.get("drv_path") or nix_info.get("drvPath", "")
+    
+    # Generate Nix PURL from out path
     # e.g., /nix/store/xxx-python3.11-fastapi-0.104.1 -> pkg:nix/python3.11-fastapi@0.104.1
-    out_path = nix_info["outPath"]
     base_name = os.path.basename(out_path)
 
     # Extract version from the base name if possible
@@ -171,7 +207,7 @@ def add_traceability(component: dict, nix_info: Dict, scope: str) -> None:
     # Add Nix properties
     props = component.setdefault("properties", [])
     props.append({"name": "nix:purl", "value": nix_purl})
-    props.append({"name": "nix:drv", "value": nix_info["drvPath"]})
+    props.append({"name": "nix:drv", "value": drv_path})
     props.append({"name": "nix:output", "value": out_path})
 
     # Add scope metadata
@@ -233,12 +269,12 @@ def process_sbom(sbom: dict, passthru_deps: Dict[str, List[Dict]]):
         # Fallback: try to find Nix component in SBOM by name+version matching
         nix_paths = find_nix_component_by_name(eco_pkg, sbom)
         if nix_paths:
-            outPath, drvPath = nix_paths
+            out_path, drv_path = nix_paths
             nix_info = {
                 "name": eco_pkg.name,
                 "version": eco_pkg.version,
-                "outPath": outPath,
-                "drvPath": drvPath,
+                "out_path": out_path,
+                "drv_path": drv_path,
             }
             add_traceability(eco_comp, nix_info, "runtime")  # Default scope
             mapped_count += 1

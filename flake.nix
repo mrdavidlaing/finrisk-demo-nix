@@ -353,14 +353,31 @@
           }
 
           # Extract passthru SBOM dependencies for traceability
-          # TODO: Fix JSON serialization of passthru.sbomDependencies
-          # For now, return empty and let add-nix-traceability handle packages by name matching
+          # Uses Context Recovery approach: builtins.getContext extracts .drv path from string context
+          # Uses "out" and "drv" field names (not outPath/drvPath) to avoid Nix coercion
           extract_sbom_deps() {
             local service="$1"
             local out_file="$2"
-            
-            echo "[sbom] extracting passthru deps for $service (SKIPPED - TODO)"
-            echo '{"runtime":[],"dev-only":[]}' > "$out_file"
+
+            echo "[sbom] extracting passthru deps for $service"
+
+            # Try to extract passthru.sbomDependencies from service derivation
+            # IMPORTANT: Use $REPO_ROOT since we're running from a temp directory
+            if deps_json=$(nix eval --json "$REPO_ROOT#$service.passthru.sbomDependencies" 2>/dev/null); then
+              echo "$deps_json" > "$out_file"
+
+              # Count extracted packages
+              runtime_count=$(echo "$deps_json" | ${pkgs.jq}/bin/jq '.runtime | length' 2>/dev/null || echo "0")
+              dev_count=$(echo "$deps_json" | ${pkgs.jq}/bin/jq '."dev-only" | length' 2>/dev/null || echo "0")
+
+              echo "[sbom] extracted $runtime_count runtime deps and $dev_count dev-only deps"
+
+            else
+              # Service doesn't have passthru.sbomDependencies
+              # This is expected for native/cobol services without ecosystem deps
+              echo '{"runtime":[],"dev-only":[],"all":[]}' > "$out_file"
+              echo "[sbom] no passthru dependencies for $service (expected for native/cobol)"
+            fi
           }
 
           base_path="$(nix build --no-link --print-out-paths "$REPO_ROOT"#transferx-base-set)"
@@ -580,6 +597,10 @@
             git
             just
 
+            # Development tools
+            opencode
+            zellij
+
             # Compliance tools
             syft
             grype
@@ -612,6 +633,10 @@
             echo "  - swift-gateway (COBOL)"
             echo "  - crypto-transfer (Rust)"
             echo "  - smoke-tests (Ruby/Cucumber)"
+            echo ""
+            echo "Development tools:"
+            echo "  - opencode        - AI coding assistant"
+            echo "  - zellij           - Terminal multiplexer"
             echo ""
             echo "Quick start: just --list"
             echo "Common commands:"

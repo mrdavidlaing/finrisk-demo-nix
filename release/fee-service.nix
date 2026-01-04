@@ -1,6 +1,9 @@
 { pkgs, lib }:
 
 let
+  # Import shared SBOM traceability utilities
+  traceability = import ../lib/sbom/nix-traceability.nix;
+
   # Evaluate all packages (runtime + dev) for SBOM traceability
   allPoetryPackages = pkgs.poetry2nix.mkPoetryPackages {
     projectDir = ../services/fee-service;
@@ -22,14 +25,6 @@ let
     };
   };
 
-  # Helper to extract package metadata as JSON-serializable values
-  extractPackageInfo = pkg: {
-    name = builtins.toString (pkg.pname or pkg.name or "unknown");
-    version = builtins.toString (pkg.version or "unknown");
-    outPath = builtins.toString pkg.outPath;
-    drvPath = builtins.toString pkg.drvPath;
-  };
-
   # Get runtime packages from the built app
   runtimePackages = app.passthru.requiredPythonModules or [];
   
@@ -37,17 +32,17 @@ let
   allPackages = allPoetryPackages.poetryPackages;
   
   # Determine dev-only packages (in allPackages but not in runtimePackages)
-  runtimePaths = builtins.map (p: p.outPath) runtimePackages;
-  isDevOnly = pkg: !(builtins.elem pkg.outPath runtimePaths);
+  # Use unsafeDiscardStringContext for comparison to avoid context issues
+  runtimePaths = builtins.map (p: builtins.unsafeDiscardStringContext (toString p)) runtimePackages;
+  isDevOnly = pkg: !(builtins.elem (builtins.unsafeDiscardStringContext (toString pkg)) runtimePaths);
   devPackages = builtins.filter isDevOnly allPackages;
 
 in app.overrideAttrs (oldAttrs: {
   passthru = (oldAttrs.passthru or {}) // {
     # Expose dependencies with scope for SBOM generation
-    sbomDependencies = {
-      runtime = builtins.map extractPackageInfo runtimePackages;
-      dev-only = builtins.map extractPackageInfo devPackages;
-      all = builtins.map extractPackageInfo (runtimePackages ++ devPackages);
+    sbomDependencies = traceability.makeSbomDependencies {
+      runtime = runtimePackages;
+      devOnly = devPackages;
     };
   };
 })

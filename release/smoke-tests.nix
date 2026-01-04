@@ -1,6 +1,9 @@
 { pkgs, lib }:
 
 let
+  # Import shared SBOM traceability utilities
+  traceability = import ../lib/sbom/nix-traceability.nix;
+
   ruby = pkgs.ruby_3_3;
   
   # Deterministic Ruby builds using bundlerEnv + bundix
@@ -40,16 +43,14 @@ let
     inherit ruby;
     gemdir = gemdir;
   };
-   # Helper to extract gem metadata for SBOM as JSON-serializable values
-  extractGemInfo = name: gem: {
-    name = builtins.toString (
-      if gem ? gemName then gem.gemName else
-      if name != null then name else "unknown"
-    );
-    version = builtins.toString (gem.version or "unknown");
-    outPath = builtins.toString gem.outPath;
-    drvPath = builtins.toString gem.drvPath;
-  };
+
+  # Extract gem info using shared traceability library
+  # For gems, we pass the gem name as an override since bundlerEnv uses attribute names
+  extractGemInfo = name: gem:
+    traceability.extractPackageInfo { nameOverride = name; } gem;
+
+  # Get all gem names
+  gemNames = builtins.attrNames gems.gems;
   
 in
 pkgs.stdenv.mkDerivation {
@@ -93,13 +94,9 @@ EOF
     
     sbomDependencies = {
       # All gems are runtime dependencies for smoke-tests
-      runtime = builtins.map 
-        (name: extractGemInfo name gems.gems.${name})
-        (builtins.attrNames gems.gems);
+      runtime = builtins.map (name: extractGemInfo name gems.gems.${name}) gemNames;
       dev-only = [];  # No dev-only gems for smoke-tests
-      all = builtins.map 
-        (name: extractGemInfo name gems.gems.${name})
-        (builtins.attrNames gems.gems);
+      all = builtins.map (name: extractGemInfo name gems.gems.${name}) gemNames;
     };
   };
   

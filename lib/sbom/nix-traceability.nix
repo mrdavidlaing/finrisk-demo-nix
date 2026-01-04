@@ -7,7 +7,7 @@
 # get coerced to their store paths (strings-with-context), losing metadata.
 # This library recovers that metadata using Nix builtins.
 
-{
+let
   # ===========================================================================
   # extractPackageInfo: Extract metadata from a Nix package for SBOM generation
   # ===========================================================================
@@ -101,5 +101,7 @@
       "dev-only" = builtins.map extract devOnly;
       all = builtins.map extract (runtime ++ devOnly);
     };
-}
 
+in {
+  inherit extractPackageInfo mapPackagesToSbomDeps makeSbomDependencies;
+}

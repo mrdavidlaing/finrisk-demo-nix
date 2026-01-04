@@ -1,0 +1,1 @@
+/home/mrdavidlaing/Work/superpowers/.opencode/plugin/superpowers.js
