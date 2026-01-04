@@ -17,6 +17,10 @@
     "ghcr.io/devcontainers/features/python:1": {
       "version": "3.11"
     },
+    "ghcr.io/devcontainers/features/npm:1": {
+      "version": "latest",
+      "installbun": "true"
+    },
     "ghcr.io/devcontainers/features/java:1": {
       "version": "17",
       "jdkDistro": "ms"
