@@ -30,7 +30,7 @@ GEM
     cucumber-messages (22.0.0)
     cucumber-tag-expressions (6.1.2)
     diff-lcs (1.6.2)
-    faraday (2.14.0)
+    faraday (2.14.1)
       faraday-net_http (>= 2.0, < 3.5)
       json
       logger
@@ -59,24 +59,30 @@ GEM
     nio4r (2.7.5)
     puma (6.6.1)
       nio4r (~> 2.0)
-    rack (2.2.21)
-    rack-protection (3.2.0)
+    rack (3.2.4)
+    rack-protection (4.2.0)
       base64 (>= 0.1.0)
-      rack (~> 2.2, >= 2.2.4)
+      logger (>= 1.6.0)
+      rack (>= 3.0.0, < 4)
+    rack-session (2.1.1)
+      base64 (>= 0.1.0)
+      rack (>= 3.0.0)
     rspec-expectations (3.13.5)
       diff-lcs (>= 1.2.0, < 2.0)
       rspec-support (~> 3.13.0)
     rspec-support (3.13.6)
     ruby2_keywords (0.0.5)
-    sinatra (3.2.0)
+    sinatra (4.2.0)
+      logger (>= 1.6.0)
       mustermann (~> 3.0)
-      rack (~> 2.2, >= 2.2.4)
-      rack-protection (= 3.2.0)
+      rack (>= 3.0.0, < 4)
+      rack-protection (= 4.2.0)
+      rack-session (>= 2.0.0, < 3)
       tilt (~> 2.0)
     sys-uname (1.4.1)
       ffi (~> 1.1)
       memoist3 (~> 1.0.0)
-    tilt (2.6.1)
+    tilt (2.7.0)
     uri (1.1.1)
 
 PLATFORMS
@@ -94,11 +100,11 @@ PLATFORMS
 
 DEPENDENCIES
   cucumber (~> 9.0)
-  faraday (~> 2.0)
+  faraday (~> 2.14)
   json
   puma (~> 6.0)
   rspec-expectations (~> 3.12)
-  sinatra (~> 3.0)
+  sinatra (~> 4.2)
 
 CHECKSUMS
   base64 (0.3.0) sha256=27337aeabad6ffae05c265c450490628ef3ebd4b67be58257393227588f5a97b
@@ -113,7 +119,7 @@ CHECKSUMS
   cucumber-messages (22.0.0) sha256=d08a6c228675dd036896bebe82a29750cbdc4dacd461e39edd1199dfa36da719
   cucumber-tag-expressions (6.1.2) sha256=f790e4e820b80d453e83c6a462ed6de36b9477b046543322f646c1e8c275916d
   diff-lcs (1.6.2) sha256=9ae0d2cba7d4df3075fe8cd8602a8604993efc0dfa934cff568969efb1909962
-  faraday (2.14.0) sha256=8699cfe5d97e55268f2596f9a9d5a43736808a943714e3d9a53e6110593941cd
+  faraday (2.14.1) sha256=a43cceedc1e39d188f4d2cdd360a8aaa6a11da0c407052e426ba8d3fb42ef61c
   faraday-net_http (3.4.2) sha256=f147758260d3526939bf57ecf911682f94926a3666502e24c69992765875906c
   ffi (1.17.2) sha256=297235842e5947cc3036ebe64077584bff583cd7a4e94e9a02fdec399ef46da6
   ffi (1.17.2-aarch64-linux-gnu) sha256=c910bd3cae70b76690418cce4572b7f6c208d271f323d692a067d59116211a1a
@@ -135,13 +141,13 @@ CHECKSUMS
   net-http (0.9.1) sha256=25ba0b67c63e89df626ed8fac771d0ad24ad151a858af2cc8e6a716ca4336996
   nio4r (2.7.5) sha256=6c90168e48fb5f8e768419c93abb94ba2b892a1d0602cb06eef16d8b7df1dca1
   puma (6.6.1) sha256=b9b56e4a4ea75d1bfa6d9e1972ee2c9f43d0883f011826d914e8e37b3694ea1e
-  rack (2.2.21) sha256=14e2f72f0765455fe424ff601588ac5ce84e95784f59e99251ffe1527152f739
-  rack-protection (3.2.0) sha256=3c74ba7fc59066453d61af9bcba5b6fe7a9b3dab6f445418d3b391d5ea8efbff
+  rack (3.2.4) sha256=5d74b6f75082a643f43c1e76b419c40f0e5527fcfee1e669ac1e6b73c0ccb6f6
+  rack-protection (4.2.0) sha256=67909eb1c29ebb52a9bdedfd4201cec70a542edd7671dbd87eae3d73d2d115bf
+  rack-session (2.1.1) sha256=0b6dc07dea7e4b583f58a48e8b806d4c9f1c6c9214ebc202ec94562cbea2e4e9
   rspec-expectations (3.13.5) sha256=33a4d3a1d95060aea4c94e9f237030a8f9eae5615e9bd85718fe3a09e4b58836
   rspec-support (3.13.6) sha256=2e8de3702427eab064c9352fe74488cc12a1bfae887ad8b91cba480ec9f8afb2
   ruby2_keywords (0.0.5) sha256=ffd13740c573b7301cf7a2e61fc857b2a8e3d3aff32545d6f8300d8bae10e3ef
-  sinatra (3.2.0) sha256=6e727f4d034e87067d9aab37f328021d7c16722ffd293ef07b6e968915109807
+  sinatra (4.2.0) sha256=3fab45063312c298dc4153ba35736b755eda329695d2bdf28129ad99131964ef
   sys-uname (1.4.1) sha256=ed2278ec670ee8af5eb5420d3a98e22188051f6241180db7c779993db2739a16
-  tilt (2.6.1) sha256=35a99bba2adf7c1e362f5b48f9b581cce4edfba98117e34696dde6d308d84770
+  tilt (2.7.0) sha256=0d5b9ba69f6a36490c64b0eee9f6e9aad517e20dcc848800a06eb116f08c6ab3
   uri (1.1.1) sha256=379fa58d27ffb1387eaada68c749d1426738bd0f654d812fcc07e7568f5c57c6
-
