@@ -5,7 +5,7 @@ pkgs.buildNpmPackage {
   version = "0.1.0";
   src = ../services/web-portal;
   
-  npmDepsHash = "sha256-1Vi6icyrUT1KSHLKZlnN54Ry69NqVnTKKEkK6SSYc9o=";
+  npmDepsHash = "sha256-seO0OEJZfkTdoTACrw6lVNsg6Tylkk5K23Vda1dhvzY=";
   
   # Next.js standalone build
   buildPhase = ''
